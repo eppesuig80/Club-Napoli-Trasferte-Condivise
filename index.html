@@ -528,6 +528,21 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
 .hold-clear-btn.is-complete{filter:brightness(1.18)}
 .hold-clear-btn:disabled{opacity:.65;cursor:not-allowed}
 
+
+/* MIGLIORE LEGGIBILITÀ NOMINATIVI SU SMARTPHONE */
+@media screen and (max-width:600px){
+  .card h3{
+    font-size:1rem !important;
+    line-height:1.18 !important;
+    font-weight:900 !important;
+    letter-spacing:.01em;
+  }
+  .card-main{gap:7px !important}
+}
+@media screen and (max-width:390px){
+  .card h3{font-size:.94rem !important}
+}
+
 </style>
 </head>
 <body>
