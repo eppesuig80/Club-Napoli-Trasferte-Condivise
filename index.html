@@ -543,6 +543,15 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
   .card h3{font-size:.94rem !important}
 }
 
+
+/* Comandi di stampa/PDF/svuota spostati nel menu */
+.menu-panel{max-height:calc(100dvh - 96px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.menu-separator{height:1px;margin:8px 4px;background:rgba(75,174,241,.28)}
+.menu-panel .menu-clear-btn{position:relative;overflow:hidden;color:#ffd8dc;border-color:rgba(239,74,87,.38);background:rgba(126,22,34,.34);padding-top:8px;padding-bottom:8px;min-height:58px}
+.menu-panel .menu-clear-btn .hold-clear-label,.menu-panel .menu-clear-btn .hold-clear-hint{position:relative;z-index:2;display:block}
+.menu-panel .menu-clear-btn .hold-clear-hint{margin-top:3px;font-size:.62rem;opacity:.82}
+.menu-panel .menu-clear-btn .hold-clear-progress{z-index:1}
+
 </style>
 </head>
 <body>
@@ -576,7 +585,7 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
   <div class="list-adhesions"><span>ADESIONI</span><strong id="totalSeats">0</strong></div>
 </div>
 <section id="reservationList" class="list"></section>
-<section class="export"><div class="export-buttons"><button id="printBtn" class="btn secondary">STAMPA LISTA</button><button id="pdfBtn" class="btn secondary">ESPORTA PDF</button><button id="clearAllBtn" class="btn danger hold-clear-btn" style="grid-column:1/-1" type="button" aria-label="Tieni premuto per 3 secondi per svuotare la lista"><span class="hold-clear-progress" aria-hidden="true"></span><span class="hold-clear-label">SVUOTA TUTTO</span><small class="hold-clear-hint">TIENI PREMUTO 3 SECONDI</small></button></div></section>
+
 <section id="printArea" class="print-only"></section>
 </main>
 <button id="addBtn" class="fab">＋ AGGIUNGI NOMINATIVO</button>
@@ -588,6 +597,14 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
   <button id="showLogoBtn" type="button">◉ LOGO</button>
   <button id="importBtn" type="button">⇧ IMPORTA JSON</button>
   <button id="backupBtn" type="button">⇩ BACKUP JSON</button>
+  <div class="menu-separator" aria-hidden="true"></div>
+  <button id="printBtn" type="button">🖨 STAMPA LISTA</button>
+  <button id="pdfBtn" type="button">▣ ESPORTA PDF</button>
+  <button id="clearAllBtn" class="menu-clear-btn hold-clear-btn" type="button" aria-label="Tieni premuto per 3 secondi per svuotare la lista">
+    <span class="hold-clear-progress" aria-hidden="true"></span>
+    <span class="hold-clear-label">🗑 SVUOTA TUTTO</span>
+    <small class="hold-clear-hint">TIENI PREMUTO 3 SECONDI</small>
+  </button>
   <input id="importFile" type="file" accept="application/json,.json">
 </div>
 <div id="modalHost"></div><div id="toast" class="toast hidden"></div>
@@ -915,7 +932,7 @@ $('#importFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)retu
   const updates={};missing.forEach((r,i)=>{const id=`import_${Date.now()}_${i}`;updates[`${DATA_ROOT}/reservations/${id}`]={fullName:normalizeName(r.fullName||`${r.nome||''} ${r.cognome||''}`).toLocaleUpperCase('it-IT'),seats:Number.parseInt(r.seats,10)||1,notes:String(r.notes||'').toLocaleUpperCase('it-IT'),memberId:r.memberId||r.memberData?.id||'',memberType:r.memberType||r.memberData?._tipo||'',memberData:r.memberData||null,surnameSort:surname(r.fullName||`${r.nome||''} ${r.cognome||''}`),createdAt:Number(r.createdAt)||Date.now()+i,updatedAt:Date.now(),createdBy:user.uid,updatedBy:user.uid}});
   await update(ref(db),updates);toast(`${missing.length} nuovi nominativi importati.`)
 }catch(err){console.error(err);toast('File JSON non valido o formato non riconosciuto.',true)}finally{e.target.value=''}};
-$('#addBtn').onclick=()=>openReservation();$('#search').oninput=render;$('#pdfBtn').onclick=openPdfOptions;$('#printBtn').onclick=printList;$('#reservationList').onclick=e=>{const position=e.target.closest('[data-position]'),edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(position)openPosition(reservations.find(r=>r.id===position.dataset.position));if(edit)openReservation(reservations.find(r=>r.id===edit.dataset.edit));if(del)openDelete(reservations.find(r=>r.id===del.dataset.delete))};
+$('#addBtn').onclick=()=>openReservation();$('#search').oninput=render;$('#pdfBtn').onclick=()=>{menuPanel.classList.add('hidden');openPdfOptions()};$('#printBtn').onclick=()=>{menuPanel.classList.add('hidden');printList()};$('#reservationList').onclick=e=>{const position=e.target.closest('[data-position]'),edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(position)openPosition(reservations.find(r=>r.id===position.dataset.position));if(edit)openReservation(reservations.find(r=>r.id===edit.dataset.edit));if(del)openDelete(reservations.find(r=>r.id===del.dataset.delete))};
 window.addEventListener('online',()=>$('#offline').classList.add('hidden'));window.addEventListener('offline',()=>$('#offline').classList.remove('hidden'));$('#offline').classList.toggle('hidden',navigator.onLine);
 updateEventDisplay();
 if(configured){const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getDatabase(app);setPersistence(auth,browserLocalPersistence).catch(()=>{});onAuthStateChanged(auth,async u=>{if(u){user=u;subscribe();return}try{await signInAnonymously(auth)}catch{toast('Accesso automatico non riuscito. Abilita l’accesso anonimo in Firebase Authentication.',true)}})}else $('#setupNotice').classList.remove('hidden');
