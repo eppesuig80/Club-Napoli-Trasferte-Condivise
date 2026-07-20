@@ -517,6 +517,17 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
   .event-heading-pro p{font-size:.78rem!important}
 }
 
+
+/* Sicurezza SVUOTA TUTTO: pressione continua di 3 secondi */
+.hold-clear-btn{position:relative;overflow:hidden;isolation:isolate;display:grid;place-items:center;gap:2px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.hold-clear-progress{position:absolute;z-index:-1;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(255,255,255,.30));pointer-events:none}
+.hold-clear-label{position:relative;font-weight:900;letter-spacing:.025em}
+.hold-clear-hint{position:relative;font-size:.62rem;line-height:1;opacity:.78;font-weight:800;letter-spacing:.06em}
+.hold-clear-btn.is-holding .hold-clear-progress{width:100%;transition:width 3s linear}
+.hold-clear-btn.is-holding{box-shadow:0 0 0 3px rgba(255,102,110,.18),0 12px 30px rgba(120,0,12,.28)}
+.hold-clear-btn.is-complete{filter:brightness(1.18)}
+.hold-clear-btn:disabled{opacity:.65;cursor:not-allowed}
+
 </style>
 </head>
 <body>
@@ -550,7 +561,7 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
   <div class="list-adhesions"><span>ADESIONI</span><strong id="totalSeats">0</strong></div>
 </div>
 <section id="reservationList" class="list"></section>
-<section class="export"><div class="export-buttons"><button id="printBtn" class="btn secondary">STAMPA LISTA</button><button id="pdfBtn" class="btn secondary">ESPORTA PDF</button><button id="clearAllBtn" class="btn danger" style="grid-column:1/-1">SVUOTA TUTTO</button></div></section>
+<section class="export"><div class="export-buttons"><button id="printBtn" class="btn secondary">STAMPA LISTA</button><button id="pdfBtn" class="btn secondary">ESPORTA PDF</button><button id="clearAllBtn" class="btn danger hold-clear-btn" style="grid-column:1/-1" type="button" aria-label="Tieni premuto per 3 secondi per svuotare la lista"><span class="hold-clear-progress" aria-hidden="true"></span><span class="hold-clear-label">SVUOTA TUTTO</span><small class="hold-clear-hint">TIENI PREMUTO 3 SECONDI</small></button></div></section>
 <section id="printArea" class="print-only"></section>
 </main>
 <button id="addBtn" class="fab">＋ AGGIUNGI NOMINATIVO</button>
@@ -815,20 +826,52 @@ const menuPanel=$('#menuPanel');
 $('#menuBtn').onclick=()=>menuPanel.classList.toggle('hidden');
 document.addEventListener('click',e=>{if(!menuPanel.contains(e.target)&&e.target!==$('#menuBtn'))menuPanel.classList.add('hidden')});
 $('#editEventBtn').onclick=openEventEditor;
-$('#clearAllBtn').onclick=async()=>{
-  if(!reservations.length){toast('La lista è già vuota.');return}
+const clearAllBtn=$('#clearAllBtn');
+let clearHoldTimer=null,clearHoldActive=false;
+const resetClearHold=()=>{
+  if(clearHoldTimer){clearTimeout(clearHoldTimer);clearHoldTimer=null}
+  clearHoldActive=false;
+  clearAllBtn.classList.remove('is-holding','is-complete');
+};
+const performClearAll=async()=>{
+  clearAllBtn.classList.add('is-complete');
+  if(!reservations.length){toast('La lista è già vuota.');resetClearHold();return}
   const confirmed=window.confirm('Sei sicuro di voler eliminare tutti i nominativi da questa trasferta? Questa operazione non può essere annullata.');
-  if(!confirmed)return;
+  if(!confirmed){resetClearHold();return}
   try{
-    $('#clearAllBtn').disabled=true;
+    clearAllBtn.disabled=true;
     await remove(ref(db,`${DATA_ROOT}/reservations`));
     toast('Tutti i nominativi della trasferta sono stati eliminati.');
   }catch{
     toast('Eliminazione completa non riuscita. Controlla la connessione e riprova.',true);
   }finally{
-    $('#clearAllBtn').disabled=false;
+    clearAllBtn.disabled=false;
+    resetClearHold();
   }
 };
+const startClearHold=e=>{
+  if(clearAllBtn.disabled||clearHoldActive)return;
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  e.preventDefault();
+  clearHoldActive=true;
+  clearAllBtn.classList.remove('is-complete');
+  void clearAllBtn.offsetWidth;
+  clearAllBtn.classList.add('is-holding');
+  try{clearAllBtn.setPointerCapture(e.pointerId)}catch{}
+  clearHoldTimer=setTimeout(()=>{clearHoldTimer=null;clearHoldActive=false;clearAllBtn.classList.remove('is-holding');performClearAll()},3000);
+};
+const cancelClearHold=e=>{
+  if(!clearHoldActive)return;
+  if(e)e.preventDefault();
+  resetClearHold();
+  toast('Pressione interrotta: nessun nominativo eliminato.');
+};
+clearAllBtn.addEventListener('pointerdown',startClearHold);
+clearAllBtn.addEventListener('pointerup',cancelClearHold);
+clearAllBtn.addEventListener('pointercancel',cancelClearHold);
+clearAllBtn.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')cancelClearHold(e)});
+clearAllBtn.addEventListener('contextmenu',e=>e.preventDefault());
+clearAllBtn.addEventListener('click',e=>e.preventDefault());
 $('#shareAppBtn').onclick=async()=>{menuPanel.classList.add('hidden');try{if(navigator.share)await navigator.share({title:eventTitle(),text:'Adesioni trasferta '+eventTitle(),url:location.href});else{await navigator.clipboard.writeText(location.href);toast('Link copiato.')}}catch(err){if(err?.name!=='AbortError')toast('Condivisione non riuscita.',true)}};
 $('#showLogoBtn').onclick=()=>{menuPanel.classList.add('hidden');const logo=document.querySelector('.brand img').src;$('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>LOGO DEL CLUB</h2><button class="icon-btn" data-close>✕</button></div><div style="text-align:center;padding:22px"><img src="${logo}" alt="Logo del Club" style="width:min(240px,80%);height:auto"></div></div></div>`;document.querySelector('[data-close]').onclick=()=>$('#modalHost').innerHTML=''};
 $('#backupBtn').onclick=()=>{menuPanel.classList.add('hidden');const backup={event:{title:eventName,date:eventDate,time:eventTime,season:eventSeason},maxSeats,reservations,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Backup-${safeFilePart(eventName)}-${eventDate||'senza-data'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Backup JSON creato.')};
