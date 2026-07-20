@@ -552,6 +552,14 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
 .menu-panel .menu-clear-btn .hold-clear-hint{margin-top:3px;font-size:.62rem;opacity:.82}
 .menu-panel .menu-clear-btn .hold-clear-progress{z-index:1}
 
+
+/* Anteprima stampa/PDF sempre leggibile anche con tema scuro */
+.print-preview-sheet,.print-preview-sheet *{color:#000!important}
+.print-preview-sheet{background:#fff!important}
+.print-preview-sheet .print-table th{background:#e9eef2!important;color:#000!important;border-color:#666!important}
+.print-preview-sheet .print-table td{background:#fff!important;color:#000!important;border-color:#777!important}
+.print-preview-sheet .print-brand strong{color:#102d44!important}
+.print-preview-sheet .print-brand small{color:#60798b!important}
 </style>
 </head>
 <body>
@@ -760,7 +768,7 @@ function pdfCssFont(font){
 }
 function openPdfPreview(font,fontSize,options){
   const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font);
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,980px)"><div class="modal-head"><h2>ANTEPRIMA PDF</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#fff"><div class="print-preview-sheet" style="padding:14px;font-family:${cssFont};font-size:${fontSize}pt">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 8px;font-family:${cssFont};font-size:${fontSize+5}pt">${esc(eventTitle())}</h3><p style="text-align:center;font-family:${cssFont};font-size:${fontSize}pt">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true,cssFont,fontSize)}</div></div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>INDIETRO</button><button id="confirmPdf" class="btn primary">SCARICA PDF</button></div></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,980px)"><div class="modal-head"><h2>ANTEPRIMA PDF</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#fff"><div class="print-preview-sheet" style="padding:14px;font-family:${cssFont};font-size:${fontSize}pt;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 8px;font-family:${cssFont};font-size:${fontSize+5}pt;color:#000">${esc(eventTitle())}</h3><p style="text-align:center;font-family:${cssFont};font-size:${fontSize}pt;color:#000">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true,cssFont,fontSize)}</div></div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>INDIETRO</button><button id="confirmPdf" class="btn primary">SCARICA PDF</button></div></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
   $('#confirmPdf').onclick=()=>generatePdf(font,fontSize,options);
 }
@@ -815,13 +823,14 @@ function printTableHtml(rows,options,inline=false,previewFont='',previewSize='')
   const cols=printColumns(options);
   const family=previewFont?`font-family:${previewFont};`:'';
   const size=previewSize?`font-size:${previewSize}pt;`:'font-size:.72rem;';
-  const style=inline?`style="width:100%;border-collapse:collapse;${family}${size}"`:'';
-  const cell=inline?` style="border:1px solid #aaa;padding:5px;text-align:left;vertical-align:top;${family}${previewSize?`font-size:${previewSize}pt;`:''}"`:'';
-  return `<div class="print-table-wrap"><table class="print-table" ${style}><thead><tr>${cols.map(c=>`<th${cell}>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td${cell}>${esc(printValue(r,c.key)||'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+  const style=inline?`style="width:100%;border-collapse:collapse;background:#fff;color:#000;${family}${size}"`:'';
+  const headCell=inline?` style="border:1px solid #666;padding:6px;text-align:left;vertical-align:top;background:#e9eef2;color:#000;font-weight:800;${family}${previewSize?`font-size:${previewSize}pt;`:''}"`:'';
+  const bodyCell=inline?` style="border:1px solid #777;padding:6px;text-align:left;vertical-align:top;background:#fff;color:#000;${family}${previewSize?`font-size:${previewSize}pt;`:''}"`:'';
+  return `<div class="print-table-wrap" style="background:#fff;color:#000"><table class="print-table" ${style}><thead><tr>${cols.map(c=>`<th${headCell}>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td${bodyCell}>${esc(printValue(r,c.key)||'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
 }
 function printBrandHtml(){
   const logo=document.querySelector('.brand img')?.src||'';
-  return `<div class="print-brand"><img src="${logo}" alt="Logo"><div><strong>CLUB NAPOLI PARTENOPEI MODENA</strong><small>Gestione adesioni trasferte</small></div></div>`
+  return `<div class="print-brand" style="background:#fff;color:#000"><img src="${logo}" alt="Logo"><div><strong style="color:#102d44">CLUB NAPOLI PARTENOPEI MODENA</strong><small style="color:#60798b">Gestione adesioni trasferte</small></div></div>`
 }
 function buildPrintArea(options){
   const rows=sortRows(reservations,'oldest');
@@ -834,7 +843,7 @@ function openPrintOptions(){
 }
 function openPrintPreview(options){
   const rows=sortRows(reservations,'oldest');
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,900px)"><div class="modal-head"><h2>ANTEPRIMA STAMPA</h2><button class="icon-btn" data-close>✕</button></div><div style="margin-top:14px;max-height:55dvh;overflow:auto;border:1px solid #d5e3ec;border-radius:12px;padding:12px;background:#fff">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 10px">${esc(eventTitle())}</h3><p style="text-align:center;font-size:.85rem">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true)}</div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>CHIUDI</button><button id="confirmPrint" class="btn primary">STAMPA</button></div></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,900px)"><div class="modal-head"><h2>ANTEPRIMA STAMPA</h2><button class="icon-btn" data-close>✕</button></div><div style="margin-top:14px;max-height:55dvh;overflow:auto;border:1px solid #d5e3ec;border-radius:12px;padding:12px;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 10px;color:#000">${esc(eventTitle())}</h3><p style="text-align:center;font-size:.85rem;color:#000">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true)}</div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>CHIUDI</button><button id="confirmPrint" class="btn primary">STAMPA</button></div></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
   $('#confirmPrint').onclick=async()=>{
     buildPrintArea(options);
