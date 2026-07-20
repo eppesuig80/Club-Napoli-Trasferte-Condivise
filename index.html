@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0794d2">
+<meta name="theme-color" content="#020d1d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Genoa - Napoli">
 <title>Trasferta Genoa - Napoli</title>
@@ -26,6 +26,240 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
 @media(max-width:600px){header{align-items:flex-start}.brand img{width:46px;height:46px}.brand h1{font-size:.84rem}.brand p{font-size:.68rem}main{padding:12px}.actions-top,.modal-actions,.export-buttons,.export-settings{grid-template-columns:1fr}.modal{padding:15px}.card{grid-template-columns:minmax(0,1fr) repeat(3,32px);gap:5px;padding:7px 7px 7px 10px}.card-main{gap:6px;min-width:0}.card h3{font-size:.84rem;line-height:1.15}.badge{min-width:0;padding:3px 6px;font-size:.7rem}.card-action{width:32px;height:32px;border-radius:9px;font-size:.9rem}.card p{font-size:.78rem}.btn{width:100%}.fab{width:calc(100% - 20px)}.print-preview-sheet{min-width:680px}.member-suggestions{max-height:42dvh}}
 @media(min-width:740px){.toolbar{grid-template-columns:1fr}.list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(min-width:1100px){main{width:min(100%,1180px)}.list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* =========================================================
+   TEMA NAPOLI BLU NOTTE — MODELLO 3
+   Solo grafica: nessuna funzione modificata
+   ========================================================= */
+@media screen {
+  :root{
+    --sky:#08a9f4;
+    --blue:#0878db;
+    --navy:#03152d;
+    --bg:#020d1d;
+    --line:rgba(84,174,244,.30);
+    --danger:#e13b42;
+    --ok:#18a86b;
+    --shadow:0 18px 42px rgba(0,0,0,.38);
+    --glass:rgba(6,30,59,.82);
+    --glass-strong:rgba(5,24,49,.95);
+    --text:#f7fbff;
+    --muted:#a9bed2;
+  }
+
+  html{background:#020b18}
+  body{
+    color:var(--text);
+    background:
+      radial-gradient(circle at 82% 3%,rgba(10,142,230,.22),transparent 26%),
+      radial-gradient(circle at 8% 20%,rgba(0,174,255,.13),transparent 30%),
+      linear-gradient(180deg,#03172f 0,#020d1d 35%,#03142a 100%);
+    background-attachment:fixed;
+  }
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    pointer-events:none;
+    opacity:.55;
+    background:
+      linear-gradient(115deg,transparent 0 48%,rgba(44,167,255,.05) 49% 50%,transparent 51% 100%),
+      repeating-linear-gradient(165deg,transparent 0 72px,rgba(28,151,242,.035) 73px 74px);
+  }
+
+  header{
+    background:rgba(2,15,33,.88);
+    border-bottom:1px solid rgba(61,166,244,.32);
+    box-shadow:0 8px 30px rgba(0,0,0,.24);
+    backdrop-filter:blur(18px) saturate(140%);
+  }
+  .brand h1{color:#fff;letter-spacing:.015em;text-shadow:0 2px 14px rgba(0,126,255,.24)}
+  .brand p{color:#9bb8cf}
+  .brand img{filter:drop-shadow(0 0 12px rgba(22,160,255,.32))}
+  .icon-btn{
+    color:#dff5ff;
+    border:1px solid rgba(35,167,255,.46);
+    background:linear-gradient(145deg,rgba(8,47,88,.88),rgba(3,23,48,.94));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.24);
+  }
+
+  main{position:relative}
+  .event-heading{
+    position:relative;
+    overflow:hidden;
+    min-height:170px;
+    display:grid;
+    align-content:center;
+    padding:28px 18px;
+    border:1px solid rgba(37,171,255,.78);
+    background:
+      radial-gradient(circle at 83% 40%,rgba(16,139,235,.25),transparent 25%),
+      linear-gradient(135deg,rgba(6,50,94,.94),rgba(2,20,43,.96));
+    box-shadow:0 0 0 1px rgba(0,145,255,.14),0 18px 45px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.09);
+  }
+  .event-heading::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:
+      linear-gradient(90deg,transparent,rgba(20,177,255,.10),transparent),
+      repeating-radial-gradient(ellipse at 50% 115%,transparent 0 42px,rgba(29,164,255,.08) 43px 44px);
+  }
+  .event-heading::after{
+    content:"TRASFERTA";
+    position:absolute;
+    top:16px;
+    left:18px;
+    padding:6px 12px;
+    border-radius:999px;
+    color:#ccefff;
+    border:1px solid rgba(59,183,255,.45);
+    background:rgba(4,31,62,.72);
+    font-size:.68rem;
+    font-weight:900;
+    letter-spacing:.14em;
+  }
+  .event-heading h2{
+    position:relative;
+    z-index:1;
+    margin-top:22px;
+    color:#fff;
+    font-size:clamp(1.65rem,5.2vw,2.5rem);
+    letter-spacing:.025em;
+    text-shadow:0 4px 22px rgba(0,0,0,.42);
+  }
+  .event-heading p{position:relative;z-index:1;color:#d9f2ff;font-size:1.02rem}
+
+  .search,
+  .card,
+  .export,
+  .empty,
+  .option-group,
+  .member-suggestions,
+  .modal,
+  .menu-panel,
+  .login-box{
+    color:var(--text);
+    border-color:rgba(79,177,245,.28);
+    background:linear-gradient(145deg,rgba(8,37,69,.88),rgba(3,22,46,.93));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 13px 30px rgba(0,0,0,.24);
+    backdrop-filter:blur(15px) saturate(130%);
+  }
+
+  .search{
+    border-color:rgba(74,178,247,.42);
+    box-shadow:0 0 0 1px rgba(0,135,255,.06),inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .search::before{content:"⌕";font-size:1.55rem;color:#76ccff;line-height:1}
+  .search input{color:#fff}
+  .search input::placeholder{color:#7895ad}
+
+  .list-head{padding:2px 4px 5px}
+  .list-head h2{color:#fff;letter-spacing:.04em}
+  .list-head small{color:#91aac0}
+  .list-adhesions{
+    min-width:82px;
+    padding:8px 13px;
+    border-radius:15px;
+    border:1px solid rgba(41,173,255,.34);
+    background:rgba(10,80,132,.32);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .list-adhesions span{color:#9edcff}
+  .list-adhesions strong{color:#23b5ff;text-shadow:0 0 18px rgba(21,173,255,.35)}
+
+  .card{
+    border-radius:16px;
+    border-color:rgba(65,167,240,.32);
+    background:linear-gradient(100deg,rgba(7,36,68,.93),rgba(3,22,45,.91));
+    transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+  }
+  .card:hover{border-color:rgba(48,183,255,.58);box-shadow:0 14px 34px rgba(0,0,0,.32),0 0 20px rgba(0,130,255,.08)}
+  .card h3{color:#fff;text-shadow:0 1px 10px rgba(0,0,0,.25)}
+  .card p{color:#aac0d2}
+  .badge{
+    color:#aee7ff;
+    border:1px solid rgba(34,167,244,.24);
+    background:rgba(10,101,160,.30);
+  }
+  .card-action{
+    color:#68cdff;
+    border-color:rgba(57,174,246,.42);
+    background:linear-gradient(145deg,rgba(10,58,105,.78),rgba(4,30,59,.86));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .card-action:hover{background:rgba(8,102,169,.52);border-color:#2db8ff}
+  .card-action.delete{color:#ff6b70;border-color:rgba(238,75,82,.45);background:rgba(104,18,28,.27)}
+
+  .export{border-radius:19px}
+  .checkbox,.export-setting,.field{color:#bad0e0}
+  select,.field input,.field textarea{
+    color:#fff;
+    border-color:rgba(85,174,235,.38);
+    background:rgba(1,15,32,.72);
+  }
+  select option{color:#fff;background:#062344}
+  input::placeholder,textarea::placeholder{color:#6f8ba1}
+  input:focus,textarea:focus,select:focus{border-color:#23b7ff;box-shadow:0 0 0 3px rgba(13,161,242,.16);outline:none}
+
+  .btn{border:1px solid transparent;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .btn.primary,.fab{
+    color:#fff;
+    border-color:rgba(80,203,255,.55);
+    background:linear-gradient(135deg,#087ce8,#0054c8);
+    box-shadow:0 12px 32px rgba(0,75,201,.38),inset 0 1px 0 rgba(255,255,255,.24);
+  }
+  .btn.primary:hover,.fab:hover{filter:brightness(1.1)}
+  .btn.secondary{
+    color:#ccefff;
+    border-color:rgba(76,178,244,.40);
+    background:rgba(5,38,72,.82);
+  }
+  .btn.danger{background:linear-gradient(135deg,#be2535,#861825);border-color:rgba(255,103,111,.42)}
+  .fab{border-radius:18px;letter-spacing:.025em}
+
+  .menu-panel button{
+    color:#d6f1ff;
+    border:1px solid rgba(62,167,238,.20);
+    background:rgba(8,48,87,.72);
+  }
+  .menu-panel button:hover{background:rgba(9,93,153,.58)}
+
+  .modal-bg{background:rgba(0,7,17,.78);backdrop-filter:blur(5px)}
+  .modal-head h2{color:#fff}
+  .member-option{color:#eaf8ff;border-bottom-color:rgba(80,167,226,.22);background:transparent}
+  .member-option:hover,.member-option:active{background:rgba(10,105,169,.36)}
+  .member-option small{color:#9db4c7}
+  .selected-member{color:#bdeaff;border:1px solid rgba(52,171,245,.25);background:rgba(5,91,151,.28)}
+  .option-group legend{color:#b9d3e4}
+  .error{color:#ffd7da;background:rgba(151,25,38,.34);border:1px solid rgba(255,92,102,.30)}
+  .toast{box-shadow:0 16px 36px rgba(0,0,0,.42)}
+
+  .offline{color:#ffe6a8;background:#59430b}
+  .warning{color:#ffd4d7;background:rgba(145,29,42,.35);border:1px solid rgba(255,87,98,.25)}
+  .empty{color:#8eaabd;border-style:dashed}
+
+  @media(max-width:600px){
+    .event-heading{min-height:145px;padding:23px 13px 18px}
+    .event-heading::after{top:12px;left:13px;font-size:.58rem;padding:5px 9px}
+    .event-heading h2{margin-top:22px;font-size:1.72rem}
+    .event-heading p{font-size:.92rem}
+    .card{padding-top:8px;padding-bottom:8px}
+    .card h3{font-size:.79rem}
+    .badge{font-size:.64rem;padding:3px 5px}
+    .list-adhesions{min-width:70px;padding:7px 9px}
+    .list-adhesions strong{font-size:1.35rem}
+  }
+
+  @media(min-width:740px){
+    .event-heading{min-height:205px}
+    .event-heading h2{font-size:2.65rem}
+    .event-heading p{font-size:1.16rem}
+  }
+}
+
 </style>
 </head>
 <body>
@@ -41,7 +275,7 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
   <div class="list-adhesions"><span>ADESIONI</span><strong id="totalSeats">0</strong></div>
 </div>
 <section id="reservationList" class="list"></section>
-<section class="export"><div class="export-buttons"><button id="printBtn" class="btn secondary">STAMPA LISTA</button><button id="pdfBtn" class="btn secondary">ESPORTA PDF</button></div></section>
+<section class="export"><div class="export-buttons"><button id="printBtn" class="btn secondary">STAMPA LISTA</button><button id="pdfBtn" class="btn secondary">ESPORTA PDF</button><button id="clearAllBtn" class="btn danger" style="grid-column:1/-1">SVUOTA TUTTO</button></div></section>
 <section id="printArea" class="print-only"></section>
 </main>
 <button id="addBtn" class="fab">＋ AGGIUNGI NOMINATIVO</button>
@@ -293,6 +527,20 @@ const menuPanel=$('#menuPanel');
 $('#menuBtn').onclick=()=>menuPanel.classList.toggle('hidden');
 document.addEventListener('click',e=>{if(!menuPanel.contains(e.target)&&e.target!==$('#menuBtn'))menuPanel.classList.add('hidden')});
 $('#editEventBtn').onclick=openEventEditor;
+$('#clearAllBtn').onclick=async()=>{
+  if(!reservations.length){toast('La lista è già vuota.');return}
+  const confirmed=window.confirm('Sei sicuro di voler eliminare tutti i nominativi da questa trasferta? Questa operazione non può essere annullata.');
+  if(!confirmed)return;
+  try{
+    $('#clearAllBtn').disabled=true;
+    await remove(ref(db,`${DATA_ROOT}/reservations`));
+    toast('Tutti i nominativi della trasferta sono stati eliminati.');
+  }catch{
+    toast('Eliminazione completa non riuscita. Controlla la connessione e riprova.',true);
+  }finally{
+    $('#clearAllBtn').disabled=false;
+  }
+};
 $('#shareAppBtn').onclick=async()=>{menuPanel.classList.add('hidden');try{if(navigator.share)await navigator.share({title:eventTitle(),text:'Adesioni trasferta '+eventTitle(),url:location.href});else{await navigator.clipboard.writeText(location.href);toast('Link copiato.')}}catch(err){if(err?.name!=='AbortError')toast('Condivisione non riuscita.',true)}};
 $('#showLogoBtn').onclick=()=>{menuPanel.classList.add('hidden');const logo=document.querySelector('.brand img').src;$('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>LOGO DEL CLUB</h2><button class="icon-btn" data-close>✕</button></div><div style="text-align:center;padding:22px"><img src="${logo}" alt="Logo del Club" style="width:min(240px,80%);height:auto"></div></div></div>`;document.querySelector('[data-close]').onclick=()=>$('#modalHost').innerHTML=''};
 $('#backupBtn').onclick=()=>{menuPanel.classList.add('hidden');const backup={event:{title:eventName,date:eventDate,time:eventTime},maxSeats,reservations,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Backup-${safeFilePart(eventName)}-${eventDate||'senza-data'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Backup JSON creato.')};
