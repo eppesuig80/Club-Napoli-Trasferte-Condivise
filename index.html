@@ -693,6 +693,32 @@ function extractDirectoryRows(data){
   const accompagnatori=Array.isArray(root.accompagnatori)?root.accompagnatori:[];
   return [...soci.map(x=>({...x,_tipo:'SOCIO'})),...accompagnatori.map(x=>({...x,_tipo:'ACCOMPAGNATORE'}))];
 }
+function directoryIdentity(m){
+  const id=String(m?.id||'').trim();
+  if(id)return `ID:${id}`;
+  return `DATI:${[m?.nome,m?.cognome,m?.dataNascita,m?._tipo].map(v=>normalizeName(v).toLocaleUpperCase('it-IT')).join('|')}`;
+}
+function hasImportedValue(v){
+  if(v===null||v===undefined)return false;
+  if(typeof v==='string')return v.trim()!=='';
+  if(Array.isArray(v))return v.length>0;
+  if(typeof v==='object')return Object.keys(v).length>0;
+  return true;
+}
+function mergeImportedMember(existing,incoming){
+  const merged={...(existing||{})};
+  Object.entries(incoming||{}).forEach(([key,value])=>{
+    if(hasImportedValue(value))merged[key]=value;
+  });
+  merged._tipo=incoming?._tipo||existing?._tipo||'SOCIO';
+  merged.updatedAt=Date.now();
+  return merged;
+}
+function comparableMember(m){
+  const copy={...(m||{})};
+  delete copy.updatedAt;delete copy.updatedBy;delete copy.createdAt;delete copy.createdBy;
+  return JSON.stringify(copy,Object.keys(copy).sort());
+}
 function reservationIdentity(r){
   return String(r?.memberData?.id||r?.memberId||'')||normalizeName(r?.fullName||'').toLocaleUpperCase('it-IT');
 }
@@ -925,12 +951,47 @@ $('#importFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)retu
   }
   const directoryRows=extractDirectoryRows(data);
   if(directoryRows.length){
-    const existing=new Set(MEMBER_DIRECTORY.map(m=>String(m.id||'')||`${m.nome}|${m.cognome}|${m.dataNascita||''}|${m._tipo||''}`));
-    const missing=directoryRows.filter(m=>!existing.has(String(m.id||'')||`${m.nome}|${m.cognome}|${m.dataNascita||''}|${m._tipo||''}`));
-    if(!missing.length){toast('Nessun nuovo nominativo da importare.');return}
-    if(!confirm(`Trovati ${missing.length} nuovi nominativi. Vuoi aggiungerli all’archivio di ricerca?`))return;
-    const updates={};missing.forEach(m=>updates[`${DATA_ROOT}/directory/${directoryKey(m)}`]=m);
-    await update(ref(db),updates);toast(`${missing.length} nuovi nominativi aggiunti alla ricerca.`);return
+    const existingMap=new Map(MEMBER_DIRECTORY.map(m=>[directoryIdentity(m),m]));
+    let added=0,changed=0,unchanged=0;
+    const prepared=[];
+    directoryRows.forEach(incoming=>{
+      const identity=directoryIdentity(incoming);
+      const current=existingMap.get(identity);
+      if(!current){
+        const created={...incoming,updatedAt:Date.now(),updatedBy:user.uid};
+        prepared.push({kind:'new',member:created});
+        existingMap.set(identity,created);added++;return;
+      }
+      const merged=mergeImportedMember(current,incoming);
+      merged.updatedBy=user.uid;
+      if(comparableMember(merged)===comparableMember(current)){unchanged++;return}
+      prepared.push({kind:'updated',member:merged,current});
+      existingMap.set(identity,merged);changed++;
+    });
+    if(!added&&!changed){toast(`Importazione completata: 0 nuovi, 0 aggiornati, ${unchanged} invariati.`);return}
+    if(!confirm(`Importazione archivio:
+• ${added} nuovi nominativi
+• ${changed} nominativi da aggiornare
+• ${unchanged} invariati
+
+Procedere?`))return;
+    const updates={};
+    prepared.forEach(({member})=>{updates[`${DATA_ROOT}/directory/${directoryKey(member)}`]=member});
+    reservations.forEach(r=>{
+      const identity=directoryIdentity(r.memberData||{id:r.memberId,nome:'',cognome:'',_tipo:r.memberType});
+      const latest=existingMap.get(identity);
+      if(!latest)return;
+      const oldData=r.memberData||{};
+      if(comparableMember(oldData)!==comparableMember(latest)){
+        updates[`${DATA_ROOT}/reservations/${r.id}/memberData`]=latest;
+        updates[`${DATA_ROOT}/reservations/${r.id}/memberId`]=latest.id||r.memberId||'';
+        updates[`${DATA_ROOT}/reservations/${r.id}/memberType`]=latest._tipo||r.memberType||'';
+        updates[`${DATA_ROOT}/reservations/${r.id}/updatedAt`]=Date.now();
+        updates[`${DATA_ROOT}/reservations/${r.id}/updatedBy`]=user.uid;
+      }
+    });
+    await update(ref(db),updates);
+    toast(`Importazione completata: ${added} nuovi, ${changed} aggiornati, ${unchanged} invariati.`);return
   }
   const rows=Array.isArray(data)?data:(Array.isArray(data.reservations)?data.reservations:Object.values(data.reservations||{}));
   if(!Array.isArray(rows)||!rows.length)throw new Error('Formato non riconosciuto');
