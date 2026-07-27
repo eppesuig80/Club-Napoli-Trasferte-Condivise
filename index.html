@@ -575,6 +575,119 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
 .missing-note{padding:9px 11px;border-radius:10px;background:#fff0ee;color:#b42318;font-size:.82rem;font-weight:800}
 @media(max-width:600px){.data-toolbar{grid-template-columns:1fr}.data-summary{grid-template-columns:1fr 1fr}.data-summary div:first-child{grid-column:1/-1}}
 
+
+
+/* =========================================================
+   VARIANTE 2 — LUMINOSITÀ MEDIA (+20%)
+   Solo grafica: struttura e funzioni invariate
+   ========================================================= */
+@media screen {
+  :root{
+    --navy:#08284d;
+    --bg:#08223f;
+    --line:rgba(104,196,255,.38);
+    --glass:rgba(12,51,91,.86);
+    --glass-strong:rgba(9,42,78,.96);
+    --muted:#bdd1e2;
+  }
+
+  html{background:#071d36}
+  body{
+    background:
+      radial-gradient(circle at 82% 3%,rgba(31,157,239,.30),transparent 29%),
+      radial-gradient(circle at 8% 20%,rgba(20,181,255,.20),transparent 32%),
+      linear-gradient(180deg,#0a3159 0,#08223f 38%,#092a4d 100%);
+  }
+  body::before{
+    opacity:.66;
+    background:
+      linear-gradient(115deg,transparent 0 48%,rgba(78,187,255,.075) 49% 50%,transparent 51% 100%),
+      repeating-linear-gradient(165deg,transparent 0 72px,rgba(60,177,255,.055) 73px 74px);
+  }
+
+  header{
+    background:rgba(7,38,72,.90);
+    border-bottom-color:rgba(83,184,255,.42);
+    box-shadow:0 8px 30px rgba(0,0,0,.20);
+  }
+
+  .search,
+  .card,
+  .export,
+  .empty,
+  .option-group,
+  .member-suggestions,
+  .modal,
+  .menu-panel,
+  .login-box{
+    border-color:rgba(101,195,255,.38);
+    background:linear-gradient(145deg,rgba(16,67,112,.90),rgba(8,42,78,.94));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.075),0 13px 30px rgba(0,0,0,.20);
+  }
+
+  .search{
+    border-color:rgba(99,197,255,.53);
+    background:linear-gradient(145deg,rgba(18,77,127,.92),rgba(10,49,89,.95));
+  }
+  .search input::placeholder{color:#a4bfd4}
+
+  .card{
+    border-color:rgba(91,187,251,.42);
+    background:linear-gradient(100deg,rgba(15,66,111,.95),rgba(8,43,79,.94));
+  }
+  .card:hover{
+    border-color:rgba(74,198,255,.72);
+    box-shadow:0 14px 34px rgba(0,0,0,.25),0 0 22px rgba(0,142,255,.13);
+  }
+  .card p{color:#c1d3e0}
+
+  .list-adhesions{
+    border-color:rgba(64,190,255,.45);
+    background:rgba(19,106,167,.42);
+  }
+  .badge{
+    color:#c7efff;
+    border-color:rgba(64,185,250,.34);
+    background:rgba(19,121,188,.42);
+  }
+  .card-action{
+    color:#8bdcff;
+    border-color:rgba(78,192,255,.52);
+    background:linear-gradient(145deg,rgba(17,88,146,.84),rgba(9,52,94,.90));
+  }
+
+  select,.field input,.field textarea{
+    border-color:rgba(105,195,247,.48);
+    background:rgba(8,42,76,.82);
+  }
+  input::placeholder,textarea::placeholder{color:#9cb4c8}
+
+  .btn.secondary{
+    background:rgba(12,62,108,.88);
+  }
+  .menu-panel button{
+    background:rgba(17,78,130,.82);
+  }
+  .menu-panel button:hover{background:rgba(19,112,176,.68)}
+
+  .event-heading{
+    background:
+      radial-gradient(circle at 83% 40%,rgba(33,157,241,.33),transparent 28%),
+      linear-gradient(135deg,rgba(12,70,123,.95),rgba(7,40,75,.96));
+    box-shadow:0 0 0 1px rgba(30,166,255,.20),0 18px 45px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  .event-heading::after{background:rgba(9,57,105,.82)}
+
+  .event-heading.event-heading-pro{
+    filter:brightness(1.08) saturate(1.04);
+  }
+
+  .modal-bg{background:rgba(2,19,37,.70)}
+  .selected-member{background:rgba(10,111,180,.38)}
+  .option-group{background:linear-gradient(145deg,rgba(17,66,107,.88),rgba(8,41,74,.92))}
+  .empty{color:#afc7d9}
+}
+
 </style>
 </head>
 <body>
@@ -743,7 +856,7 @@ function openReservation(r=null){
   const actionButtons=r
     ? `<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button id="saveBtn" class="btn primary">SALVA</button></div>`
     : `<div class="modal-actions with-manual"><button type="button" class="btn secondary" data-close>ANNULLA</button><button type="button" id="manualAddBtn" class="btn secondary manual-add-btn">AGGIUNGI<br>MANUALMENTE</button><button id="saveBtn" class="btn primary">SALVA</button></div>`;
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>${r?'MODIFICA NOMINATIVO':'AGGIUNGI NOMINATIVO'}</h2><button class="icon-btn" data-close>✕</button></div><form id="reservationForm"><label class="field">NOME E COGNOME<div class="member-search-wrap"><input id="fullName" required autocomplete="off" autocapitalize="characters" style="text-transform:uppercase" value="${esc(r?.fullName||'')}" placeholder="SCRIVI NOME O COGNOME"><small style="display:block;margin-top:6px;color:#60798b;font-weight:700">Cerca nell’archivio soci e accompagnatori</small><div id="memberSuggestions" class="member-suggestions hidden"></div></div></label><div id="selectedMemberInfo" class="selected-member ${selectedMember?'':'hidden'}">${selectedMember?esc(`${memberLabel(selectedMember)} — ${selectedMember._tipo}`):''}</div><label class="field">NUMERO POSTI<input id="seats" type="number" min="1" step="1" inputmode="numeric" required value="${Number.parseInt(r?.seats,10)||1}"></label><label class="field">NOTE<textarea id="notes" rows="4" autocapitalize="characters" style="text-transform:uppercase">${esc(r?.notes||'')}</textarea></label><div id="formError" class="error hidden"></div>${actionButtons}</form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>${r?'MODIFICA NOMINATIVO':'AGGIUNGI NOMINATIVO'}</h2><button class="icon-btn" data-close>✕</button></div><form id="reservationForm"><label class="field">COGNOME E NOME<div class="member-search-wrap"><input id="fullName" required autocomplete="off" autocapitalize="characters" style="text-transform:uppercase" value="${esc(r?.fullName||'')}" placeholder="SCRIVI NOME O COGNOME"><small style="display:block;margin-top:6px;color:#60798b;font-weight:700">Cerca nell’archivio soci e accompagnatori</small><div id="memberSuggestions" class="member-suggestions hidden"></div></div></label><div id="selectedMemberInfo" class="selected-member ${selectedMember?'':'hidden'}">${selectedMember?esc(`${memberLabel(selectedMember)} — ${selectedMember._tipo}`):''}</div><label class="field">NUMERO POSTI<input id="seats" type="number" min="1" step="1" inputmode="numeric" required value="${Number.parseInt(r?.seats,10)||1}"></label><label class="field">NOTE<textarea id="notes" rows="4" autocapitalize="characters" style="text-transform:uppercase">${esc(r?.notes||'')}</textarea></label><div id="formError" class="error hidden"></div>${actionButtons}</form></div></div>`;
   const input=$('#fullName'),box=$('#memberSuggestions'),info=$('#selectedMemberInfo');
   const normalizeSearch=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('it-IT').trim();
   const showSuggestions=()=>{const q=normalizeSearch(input.value);if(q.length<2){box.classList.add('hidden');box.innerHTML='';return}const matches=MEMBER_DIRECTORY.map((m,index)=>({m,index,search:normalizeSearch(`${m.nome||''} ${m.cognome||''} ${m.cognome||''} ${m.nome||''}`)})).filter(x=>x.search.includes(q)).slice(0,40);box.innerHTML=matches.length?matches.map(({m,index})=>`<button type="button" class="member-option" data-member-index="${index}"><strong>${esc(memberLabel(m))}</strong><small>${esc(memberDetails(m))}</small></button>`).join(''):'<div style="padding:12px;color:#60798b">Nessun socio o accompagnatore trovato. Usa AGGIUNGI MANUALMENTE.</div>';box.classList.remove('hidden')};
@@ -781,7 +894,7 @@ async function saveManualReservation(e){
     await update(ref(db),updates);document.activeElement?.blur();$('#modalHost').innerHTML='';toast('Nominativo aggiunto alla trasferta e all’archivio generale.');
   }catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';err.classList.remove('hidden');$('#manualSaveBtn').disabled=false}
 }
-async function saveReservation(e){e.preventDefault();const name=normalizeName($('#fullName').value).toLocaleUpperCase('it-IT'),seats=Number.parseInt($('#seats').value,10),notes=$('#notes').value.trim().toLocaleUpperCase('it-IT'),err=$('#formError');if(!name||!Number.isInteger(seats)||seats<1){err.textContent=!name?'Inserisci nome e cognome.':'Il numero dei posti deve essere un intero maggiore di zero.';err.classList.remove('hidden');return}const memberData=selectedMember?JSON.parse(JSON.stringify(selectedMember)):(editing?.memberData||null);const normalizedName=normalizeName(name).toLocaleUpperCase('it-IT');const duplicate=reservations.some(r=>r.id!==editing?.id&&((memberData?.id&&r.memberData?.id===memberData.id)||normalizeName(r.fullName||'').toLocaleUpperCase('it-IT')===normalizedName));if(duplicate){err.textContent='Socio già presente.';err.classList.remove('hidden');toast('Socio già presente.',true);return}$('#saveBtn').disabled=true;try{const now=Date.now(),payload={fullName:name,seats,notes,memberId:memberData?.id||'',memberType:memberData?._tipo||'',memberData,surnameSort:surname(name),updatedAt:now,updatedBy:user.uid};if(editing)await update(ref(db,`${DATA_ROOT}/reservations/${editing.id}`),payload);else{const ordered=sortRows(reservations,'oldest'),nextOrder=ordered.length?Math.max(...ordered.map((r,i)=>Number.isFinite(Number(r.order))?Number(r.order):i+1))+1:1;const newRef=push(ref(db,`${DATA_ROOT}/reservations`));await set(newRef,{...payload,order:nextOrder,createdAt:now,createdBy:user.uid})}document.activeElement?.blur();$('#modalHost').innerHTML='';toast(editing?'Nominativo modificato.':'Nominativo aggiunto.')}catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';err.classList.remove('hidden');$('#saveBtn').disabled=false}}
+async function saveReservation(e){e.preventDefault();const typedName=normalizeName($('#fullName').value).toLocaleUpperCase('it-IT'),seats=Number.parseInt($('#seats').value,10),notes=$('#notes').value.trim().toLocaleUpperCase('it-IT'),err=$('#formError');if(!typedName||!Number.isInteger(seats)||seats<1){err.textContent=!typedName?'Inserisci cognome e nome.':'Il numero dei posti deve essere un intero maggiore di zero.';err.classList.remove('hidden');return}const memberData=selectedMember?JSON.parse(JSON.stringify(selectedMember)):(editing?.memberData||null);const name=memberData?memberLabel(memberData):typedName;const normalizedName=normalizeName(name).toLocaleUpperCase('it-IT');const duplicate=reservations.some(r=>r.id!==editing?.id&&((memberData?.id&&r.memberData?.id===memberData.id)||normalizeName(r.fullName||'').toLocaleUpperCase('it-IT')===normalizedName));if(duplicate){err.textContent='Socio già presente.';err.classList.remove('hidden');toast('Socio già presente.',true);return}$('#saveBtn').disabled=true;try{const now=Date.now(),payload={fullName:name,seats,notes,memberId:memberData?.id||'',memberType:memberData?._tipo||'',memberData,surnameSort:surname(name),updatedAt:now,updatedBy:user.uid};if(editing)await update(ref(db,`${DATA_ROOT}/reservations/${editing.id}`),payload);else{const ordered=sortRows(reservations,'oldest'),nextOrder=ordered.length?Math.max(...ordered.map((r,i)=>Number.isFinite(Number(r.order))?Number(r.order):i+1))+1:1;const newRef=push(ref(db,`${DATA_ROOT}/reservations`));await set(newRef,{...payload,order:nextOrder,createdAt:now,createdBy:user.uid})}document.activeElement?.blur();$('#modalHost').innerHTML='';toast(editing?'Nominativo modificato.':'Nominativo aggiunto.')}catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';err.classList.remove('hidden');$('#saveBtn').disabled=false}}
 function openPosition(r){
   const rows=sortRows(reservations,'oldest');
   const currentIndex=rows.findIndex(x=>x.id===r.id);
@@ -799,7 +912,7 @@ function exportColumns(options){const cols=[{key:'name',label:'Nome e cognome'}]
 function exportValue(r,key){if(key==='name')return r.fullName||'';if(key==='seats')return String(r.seats||1);if(key==='notes')return r.notes||'';return r.memberData?.[key]||''}
 function exportOptionFields(prefix){return `<fieldset class="option-group"><legend>DATI DA INCLUDERE</legend><label class="checkbox"><input id="${prefix}Cf" type="checkbox"> Codice fiscale</label><label class="checkbox"><input id="${prefix}Scadenza" type="checkbox"> Scadenza</label><label class="checkbox"><input id="${prefix}CodSic" type="checkbox"> COD. SIC</label></fieldset>`}
 function openPdfOptions(){
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>ESPORTA PDF</h2><button class="icon-btn" data-close>✕</button></div><form id="pdfOptionsForm"><label class="field">FONT DOCUMENTO<select id="pdfFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="pdfFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> nome e cognome, luogo e data di nascita, residenza e provincia, tessera del tifoso.</p>${exportOptionFields('pdf')}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA PDF</button></div></form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>ESPORTA PDF</h2><button class="icon-btn" data-close>✕</button></div><form id="pdfOptionsForm"><label class="field">FONT DOCUMENTO<select id="pdfFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="pdfFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e provincia, tessera del tifoso.</p>${exportOptionFields('pdf')}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA PDF</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
   $('#pdfOptionsForm').onsubmit=e=>{e.preventDefault();openPdfPreview($('#pdfFont').value,Number($('#pdfFontSize').value)||9,{cf:$('#pdfCf').checked,scadenza:$('#pdfScadenza').checked,codSic:$('#pdfCodSic').checked})};
 }
@@ -834,15 +947,30 @@ function formatDateIt(value){
   return m?`${m[3]}/${m[2]}/${m[1]}`:String(value)
 }
 
-function normalizePersonKey(v){return normalizeName(v||'').toLocaleUpperCase('it-IT')}
+function normalizePersonKey(v){
+  return normalizeName(v||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Za-z0-9]+/g,' ')
+    .trim().toLocaleUpperCase('it-IT')
+    .split(/\s+/).filter(Boolean).sort((a,b)=>a.localeCompare(b,'it')).join('|')
+}
+function memberDataScore(m){
+  const important=['nome','cognome','dataNascita','luogo','prov','residenza','provResidenza','tessera','scadenza','cf','codSic'];
+  return important.reduce((score,key)=>score+(String(m?.[key]||'').trim()?1:0),0);
+}
 function findDirectoryMemberForReservation(r){
   const ids=[r?.memberId,r?.memberData?.id].filter(Boolean).map(String);
-  let found=ids.length?MEMBER_DIRECTORY.find(m=>ids.includes(String(m.id||''))):null;
-  if(found)return found;
-  const full=normalizePersonKey(r?.fullName||'');
-  if(!full)return r?.memberData||{};
-  found=MEMBER_DIRECTORY.find(m=>normalizePersonKey(memberLabel(m))===full);
-  return found||r?.memberData||{};
+  const full=normalizePersonKey(r?.fullName||memberLabel(r?.memberData||{}));
+  const candidates=[];
+  MEMBER_DIRECTORY.forEach(m=>{
+    const idMatch=ids.includes(String(m?.id||''));
+    const nameMatch=full&&normalizePersonKey(memberLabel(m))===full;
+    if(idMatch||nameMatch)candidates.push(m);
+  });
+  if(r?.memberData&&Object.keys(r.memberData).length)candidates.push(r.memberData);
+  if(!candidates.length)return {};
+  candidates.sort((a,b)=>memberDataScore(b)-memberDataScore(a));
+  return candidates[0]||{};
 }
 function memberMissingFields(m){
   const required=[['dataNascita','data di nascita'],['luogo','luogo di nascita'],['prov','provincia di nascita'],['residenza','residenza'],['provResidenza','provincia di residenza'],['tessera','tessera del tifoso']];
@@ -917,7 +1045,7 @@ function buildPrintArea(options){
   $('#printArea').innerHTML=`${printBrandHtml()}<h1>${esc(eventTitle())}</h1><p>Persone aderenti: ${total()}</p>${printTableHtml(rows,options)}`
 }
 function openPrintOptions(){
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>OPZIONI DI STAMPA</h2><button class="icon-btn" data-close>✕</button></div><form id="printOptionsForm" style="display:grid;gap:15px;margin-top:16px"><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> nome e cognome, luogo e data di nascita, residenza e CAP, tessera del tifoso.</p><p style="margin:0;color:#405b70;font-size:.86rem">Nel campo Residenza e CAP viene riportata la provincia di residenza presente nell’archivio.</p>${printOptionsFields()}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA</button></div></form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>OPZIONI DI STAMPA</h2><button class="icon-btn" data-close>✕</button></div><form id="printOptionsForm" style="display:grid;gap:15px;margin-top:16px"><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e CAP, tessera del tifoso.</p><p style="margin:0;color:#405b70;font-size:.86rem">Nel campo Residenza e CAP viene riportata la provincia di residenza presente nell’archivio.</p>${printOptionsFields()}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
   $('#printOptionsForm').onsubmit=e=>{e.preventDefault();openPrintPreview({cf:$('#printCf').checked,scadenza:$('#printScadenza').checked,codSic:$('#printCodSic').checked})};
 }
