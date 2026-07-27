@@ -848,6 +848,31 @@ function comparableMember(m){
   delete copy.updatedAt;delete copy.updatedBy;delete copy.createdAt;delete copy.createdBy;
   return JSON.stringify(copy,Object.keys(copy).sort());
 }
+function firebaseSafe(value){
+  if(value===undefined||typeof value==='function'||typeof value==='symbol')return undefined;
+  if(value===null)return null;
+  if(typeof value==='number')return Number.isFinite(value)?value:'';
+  if(typeof value==='string'||typeof value==='boolean')return value;
+  if(Array.isArray(value))return value.map(firebaseSafe).filter(v=>v!==undefined);
+  if(value instanceof Date)return value.toISOString();
+  if(typeof value==='object'){
+    const clean={};
+    Object.entries(value).forEach(([key,item])=>{
+      const safe=firebaseSafe(item);
+      if(safe!==undefined)clean[key]=safe;
+    });
+    return clean;
+  }
+  return String(value);
+}
+function firebaseImportErrorMessage(err){
+  const code=String(err?.code||'').toLowerCase();
+  const message=String(err?.message||'').toLowerCase();
+  if(code.includes('permission')||message.includes('permission'))return 'Importazione letta correttamente, ma Firebase ha rifiutato il salvataggio per mancanza di autorizzazione.';
+  if(code.includes('network')||message.includes('network')||!navigator.onLine)return 'Importazione letta correttamente, ma il salvataggio non è riuscito per un problema di connessione.';
+  if(message.includes('invalid')||message.includes('undefined')||message.includes('nan'))return 'Importazione letta correttamente, ma alcuni valori non erano compatibili con Firebase. I dati sono stati ripuliti: riprova l’importazione.';
+  return 'Importazione letta correttamente, ma il salvataggio su Firebase non è riuscito. Riprova.';
+}
 function reservationIdentity(r){
   return String(r?.memberData?.id||r?.memberId||'')||normalizeName(r?.fullName||'').toLocaleUpperCase('it-IT');
 }
@@ -1215,7 +1240,14 @@ Procedere?`))return;
         updates[`${DATA_ROOT}/reservations/${r.id}/updatedBy`]=user.uid;
       }
     });
-    await update(ref(db),updates);
+    try{
+      const cleanUpdates=firebaseSafe(updates);
+      await update(ref(db),cleanUpdates);
+    }catch(saveErr){
+      console.error('Errore salvataggio importazione archivio:',saveErr);
+      toast(firebaseImportErrorMessage(saveErr),true);
+      return;
+    }
     toast(`Importazione completata: ${added} nuovi, ${changed} aggiornati, ${unchanged} invariati.`);return
   }
   const rows=Array.isArray(data)?data:(Array.isArray(data.reservations)?data.reservations:Object.values(data.reservations||{}));
@@ -1225,8 +1257,20 @@ Procedere?`))return;
   if(!missing.length){toast('Tutti i nominativi sono già presenti.');return}
   if(!confirm(`Importare ${missing.length} nuovi nominativi senza eliminare quelli già presenti?`))return;
   const updates={};missing.forEach((r,i)=>{const id=`import_${Date.now()}_${i}`;updates[`${DATA_ROOT}/reservations/${id}`]={fullName:normalizeName(r.fullName||`${r.nome||''} ${r.cognome||''}`).toLocaleUpperCase('it-IT'),seats:Number.parseInt(r.seats,10)||1,notes:String(r.notes||'').toLocaleUpperCase('it-IT'),memberId:r.memberId||r.memberData?.id||'',memberType:r.memberType||r.memberData?._tipo||'',memberData:r.memberData||null,surnameSort:surname(r.fullName||`${r.nome||''} ${r.cognome||''}`),createdAt:Number(r.createdAt)||Date.now()+i,updatedAt:Date.now(),createdBy:user.uid,updatedBy:user.uid}});
-  await update(ref(db),updates);toast(`${missing.length} nuovi nominativi importati.`)
-}catch(err){console.error(err);toast('File JSON non valido o formato non riconosciuto.',true)}finally{e.target.value=''}};
+  try{
+    const cleanUpdates=firebaseSafe(updates);
+    await update(ref(db),cleanUpdates);
+  }catch(saveErr){
+    console.error('Errore salvataggio importazione nominativi:',saveErr);
+    toast(firebaseImportErrorMessage(saveErr),true);
+    return;
+  }
+  toast(`${missing.length} nuovi nominativi importati.`)
+}catch(err){
+  console.error('Errore lettura o formato JSON:',err);
+  const msg=err instanceof SyntaxError?'File JSON non valido: il contenuto non è scritto correttamente.':'Formato JSON non riconosciuto: il file non contiene un archivio o un backup compatibile.';
+  toast(msg,true)
+}finally{e.target.value=''}};
 $('#addBtn').onclick=()=>openReservation();$('#search').oninput=render;$('#pdfBtn').onclick=()=>{menuPanel.classList.add('hidden');openPdfOptions()};$('#printBtn').onclick=()=>{menuPanel.classList.add('hidden');printList()};$('#reservationList').onclick=e=>{const position=e.target.closest('[data-position]'),edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(position)openPosition(reservations.find(r=>r.id===position.dataset.position));if(edit)openReservation(reservations.find(r=>r.id===edit.dataset.edit));if(del)openDelete(reservations.find(r=>r.id===del.dataset.delete))};
 window.addEventListener('online',()=>$('#offline').classList.add('hidden'));window.addEventListener('offline',()=>$('#offline').classList.remove('hidden'));$('#offline').classList.toggle('hidden',navigator.onLine);
 updateEventDisplay();
