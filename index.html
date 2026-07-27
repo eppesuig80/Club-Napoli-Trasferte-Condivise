@@ -958,19 +958,60 @@ function memberDataScore(m){
   const important=['nome','cognome','dataNascita','luogo','prov','residenza','provResidenza','tessera','scadenza','cf','codSic'];
   return important.reduce((score,key)=>score+(String(m?.[key]||'').trim()?1:0),0);
 }
-function findDirectoryMemberForReservation(r){
+function personText(v){
+  return normalizeName(v||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Za-z0-9]+/g,' ')
+    .trim().toLocaleUpperCase('it-IT')
+}
+function editDistance(a,b){
+  a=personText(a);b=personText(b);
+  if(a===b)return 0;
+  if(!a.length)return b.length;if(!b.length)return a.length;
+  const prev=Array.from({length:b.length+1},(_,i)=>i),cur=new Array(b.length+1);
+  for(let i=1;i<=a.length;i++){
+    cur[0]=i;
+    for(let j=1;j<=b.length;j++)cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    for(let j=0;j<=b.length;j++)prev[j]=cur[j];
+  }
+  return prev[b.length]
+}
+function personMatchScore(r,m){
   const ids=[r?.memberId,r?.memberData?.id].filter(Boolean).map(String);
-  const full=normalizePersonKey(r?.fullName||memberLabel(r?.memberData||{}));
-  const candidates=[];
+  if(ids.includes(String(m?.id||'')))return 10000;
+  const source=personText(r?.fullName||memberLabel(r?.memberData||{}));
+  if(!source)return -1;
+  const ordered=personText(`${m?.cognome||''} ${m?.nome||''}`);
+  const reversed=personText(`${m?.nome||''} ${m?.cognome||''}`);
+  if(source===ordered||source===reversed)return 9000;
+  if(normalizePersonKey(source)===normalizePersonKey(ordered))return 8500;
+
+  // Patch prudente per piccoli refusi: accetta al massimo una lettera diversa
+  // e soltanto quando il resto del nominativo coincide quasi integralmente.
+  const d=Math.min(editDistance(source,ordered),editDistance(source,reversed));
+  const longest=Math.max(source.length,ordered.length,reversed.length);
+  const sourceWords=source.split(/\s+/).filter(Boolean);
+  const memberWords=[personText(m?.nome||''),personText(m?.cognome||'')].flatMap(v=>v.split(/\s+/)).filter(Boolean);
+  const hasExactWord=sourceWords.some(word=>word.length>=4&&memberWords.includes(word));
+  if(longest>=8&&d<=2&&hasExactWord)return 7000;
+  return -1;
+}
+function findDirectoryMemberForReservation(r){
+  const ranked=[];
   MEMBER_DIRECTORY.forEach(m=>{
-    const idMatch=ids.includes(String(m?.id||''));
-    const nameMatch=full&&normalizePersonKey(memberLabel(m))===full;
-    if(idMatch||nameMatch)candidates.push(m);
+    const matchScore=personMatchScore(r,m);
+    if(matchScore>=0)ranked.push({m,matchScore,dataScore:memberDataScore(m)});
   });
-  if(r?.memberData&&Object.keys(r.memberData).length)candidates.push(r.memberData);
-  if(!candidates.length)return {};
-  candidates.sort((a,b)=>memberDataScore(b)-memberDataScore(a));
-  return candidates[0]||{};
+  if(r?.memberData&&Object.keys(r.memberData).length){
+    ranked.push({m:r.memberData,matchScore:personMatchScore(r,r.memberData),dataScore:memberDataScore(r.memberData)});
+  }
+  if(!ranked.length)return {};
+  ranked.sort((a,b)=>b.matchScore-a.matchScore||b.dataScore-a.dataScore);
+
+  // Un riscontro approssimativo viene usato solo se è univoco, per evitare
+  // di associare per errore due persone con nomi molto simili.
+  if(ranked[0].matchScore===7000&&ranked[1]?.matchScore===7000)return r?.memberData||{};
+  return ranked[0].m||{};
 }
 function memberMissingFields(m){
   const required=[['dataNascita','data di nascita'],['luogo','luogo di nascita'],['prov','provincia di nascita'],['residenza','residenza'],['provResidenza','provincia di residenza'],['tessera','tessera del tifoso']];
