@@ -1192,85 +1192,152 @@ $('#dataMembersBtn').onclick=openDataMembers;
 $('#showLogoBtn').onclick=()=>{menuPanel.classList.add('hidden');const logo=document.querySelector('.brand img').src;$('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>LOGO DEL CLUB</h2><button class="icon-btn" data-close>✕</button></div><div style="text-align:center;padding:22px"><img src="${logo}" alt="Logo del Club" style="width:min(240px,80%);height:auto"></div></div></div>`;document.querySelector('[data-close]').onclick=()=>$('#modalHost').innerHTML=''};
 $('#backupBtn').onclick=()=>{menuPanel.classList.add('hidden');const backup={event:{title:eventName,date:eventDate,time:eventTime,season:eventSeason},maxSeats,reservations,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Backup-${safeFilePart(eventName)}-${eventDate||'senza-data'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Backup JSON creato.')};
 $('#importBtn').onclick=()=>{menuPanel.classList.add('hidden');$('#importFile').click()};
-$('#importFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{
-  const data=JSON.parse(await file.text());
-  if(data?.teamSeasons&&typeof data.teamSeasons==='object'){
-    Object.entries(data.teamSeasons).forEach(([season,comps])=>{TEAM_SEASONS[season]=comps});
-    toast('Archivio squadre aggiornato.');updateTeamLogos();return;
-  }
-  const directoryRows=extractDirectoryRows(data);
-  if(directoryRows.length){
-    const existingMap=new Map(MEMBER_DIRECTORY.map(m=>[directoryIdentity(m),m]));
-    let added=0,changed=0,unchanged=0;
-    const prepared=[];
-    directoryRows.forEach(incoming=>{
-      const identity=directoryIdentity(incoming);
-      const current=existingMap.get(identity);
-      if(!current){
-        const created={...incoming,updatedAt:Date.now(),updatedBy:user.uid};
-        prepared.push({kind:'new',member:created});
-        existingMap.set(identity,created);added++;return;
-      }
-      const merged=mergeImportedMember(current,incoming);
-      merged.updatedBy=user.uid;
-      if(comparableMember(merged)===comparableMember(current)){unchanged++;return}
-      prepared.push({kind:'updated',member:merged,current});
-      existingMap.set(identity,merged);changed++;
-    });
-    if(!added&&!changed){toast(`Importazione completata: 0 nuovi, 0 aggiornati, ${unchanged} invariati.`);return}
-    if(!confirm(`Importazione archivio:
-• ${added} nuovi nominativi
-• ${changed} nominativi da aggiornare
-• ${unchanged} invariati
+$('#importFile').onchange=async e=>{
+  const file=e.target.files?.[0];
+  if(!file)return;
+  try{
+    let text=await file.text();
+    if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+    let data=JSON.parse(text);
+    if(typeof data==='string')data=JSON.parse(data);
 
-Procedere?`))return;
-    const updates={};
-    prepared.forEach(({member})=>{updates[`${DATA_ROOT}/directory/${directoryKey(member)}`]=member});
-    reservations.forEach(r=>{
-      const identity=directoryIdentity(r.memberData||{id:r.memberId,nome:'',cognome:'',_tipo:r.memberType});
-      let latest=existingMap.get(identity);
-      if(!latest){const full=normalizePersonKey(r.fullName);latest=[...existingMap.values()].find(m=>normalizePersonKey(memberLabel(m))===full)}
-      if(!latest)return;
-      const oldData=r.memberData||{};
-      if(comparableMember(oldData)!==comparableMember(latest)){
-        updates[`${DATA_ROOT}/reservations/${r.id}/memberData`]=latest;
-        updates[`${DATA_ROOT}/reservations/${r.id}/memberId`]=latest.id||r.memberId||'';
-        updates[`${DATA_ROOT}/reservations/${r.id}/memberType`]=latest._tipo||r.memberType||'';
-        updates[`${DATA_ROOT}/reservations/${r.id}/updatedAt`]=Date.now();
-        updates[`${DATA_ROOT}/reservations/${r.id}/updatedBy`]=user.uid;
-      }
-    });
-    try{
-      const cleanUpdates=firebaseSafe(updates);
-      await update(ref(db),cleanUpdates);
-    }catch(saveErr){
-      console.error('Errore salvataggio importazione archivio:',saveErr);
-      toast(firebaseImportErrorMessage(saveErr),true);
+    if(data?.teamSeasons&&typeof data.teamSeasons==='object'){
+      Object.entries(data.teamSeasons).forEach(([season,comps])=>{TEAM_SEASONS[season]=comps});
+      toast('Archivio squadre aggiornato.');
+      updateTeamLogos();
       return;
     }
-    toast(`Importazione completata: ${added} nuovi, ${changed} aggiornati, ${unchanged} invariati.`);return
+
+    // Formato ufficiale Backup.json: { appData: { soci: [...], accompagnatori: [...] }, logo: ... }
+    const archiveRoot=(data&&typeof data==='object'&&data.appData&&typeof data.appData==='object')?data.appData:data;
+    const sociRaw=Array.isArray(archiveRoot?.soci)?archiveRoot.soci:
+      (archiveRoot?.soci&&typeof archiveRoot.soci==='object'?Object.values(archiveRoot.soci):[]);
+    const accompagnatoriRaw=Array.isArray(archiveRoot?.accompagnatori)?archiveRoot.accompagnatori:
+      (archiveRoot?.accompagnatori&&typeof archiveRoot.accompagnatori==='object'?Object.values(archiveRoot.accompagnatori):[]);
+    const directoryRows=[
+      ...sociRaw.filter(Boolean).map(x=>({...x,_tipo:'SOCIO'})),
+      ...accompagnatoriRaw.filter(Boolean).map(x=>({...x,_tipo:'ACCOMPAGNATORE'}))
+    ].filter(m=>String(m?.nome||'').trim()&&String(m?.cognome||'').trim());
+
+    if(directoryRows.length){
+      try{
+        const existingMap=new Map(MEMBER_DIRECTORY.map(m=>[directoryIdentity(m),m]));
+        let added=0,changed=0,unchanged=0;
+        const prepared=[];
+
+        directoryRows.forEach(incoming=>{
+          const identity=directoryIdentity(incoming);
+          const current=existingMap.get(identity);
+          if(!current){
+            const created={...incoming,updatedAt:Date.now(),updatedBy:user.uid};
+            prepared.push({kind:'new',member:created});
+            existingMap.set(identity,created);
+            added++;
+            return;
+          }
+          const merged=mergeImportedMember(current,incoming);
+          merged.updatedBy=user.uid;
+          if(comparableMember(merged)===comparableMember(current)){
+            unchanged++;
+            return;
+          }
+          prepared.push({kind:'updated',member:merged,current});
+          existingMap.set(identity,merged);
+          changed++;
+        });
+
+        if(!added&&!changed){
+          toast(`Importazione completata: 0 nuovi, 0 aggiornati, ${unchanged} invariati.`);
+          return;
+        }
+
+        if(!confirm(`Importazione archivio:\n• ${added} nuovi nominativi\n• ${changed} nominativi da aggiornare\n• ${unchanged} invariati\n\nProcedere?`))return;
+
+        const updates={};
+        prepared.forEach(({member})=>{
+          updates[`${DATA_ROOT}/directory/${directoryKey(member)}`]=member;
+        });
+
+        reservations.forEach(r=>{
+          let latest=null;
+          const memberId=String(r.memberId||r.memberData?.id||'').trim();
+          if(memberId)latest=[...existingMap.values()].find(m=>String(m?.id||'').trim()===memberId)||null;
+          if(!latest){
+            const full=normalizePersonKey(r.fullName);
+            latest=[...existingMap.values()]
+              .filter(m=>normalizePersonKey(memberLabel(m))===full)
+              .sort((a,b)=>memberDataScore(b)-memberDataScore(a))[0]||null;
+          }
+          if(!latest)return;
+          const oldData=r.memberData||{};
+          if(comparableMember(oldData)!==comparableMember(latest)){
+            updates[`${DATA_ROOT}/reservations/${r.id}/memberData`]=latest;
+            updates[`${DATA_ROOT}/reservations/${r.id}/memberId`]=latest.id||r.memberId||'';
+            updates[`${DATA_ROOT}/reservations/${r.id}/memberType`]=latest._tipo||r.memberType||'';
+            updates[`${DATA_ROOT}/reservations/${r.id}/updatedAt`]=Date.now();
+            updates[`${DATA_ROOT}/reservations/${r.id}/updatedBy`]=user.uid;
+          }
+        });
+
+        const cleanUpdates=firebaseSafe(updates);
+        if(!cleanUpdates||typeof cleanUpdates!=='object'||!Object.keys(cleanUpdates).length){
+          toast('Nessun dato da salvare.');
+          return;
+        }
+        await update(ref(db),cleanUpdates);
+        toast(`Importazione completata: ${added} nuovi, ${changed} aggiornati, ${unchanged} invariati.`);
+        return;
+      }catch(saveErr){
+        console.error('Errore importazione archivio:',saveErr);
+        toast(firebaseImportErrorMessage(saveErr),true);
+        return;
+      }
+    }
+
+    const rows=Array.isArray(data)?data:
+      (Array.isArray(data?.reservations)?data.reservations:
+      (data?.reservations&&typeof data.reservations==='object'?Object.values(data.reservations):[]));
+
+    if(!Array.isArray(rows)||!rows.length){
+      throw new Error('FORMAT_NOT_RECOGNIZED');
+    }
+
+    const existing=new Set(reservations.map(reservationIdentity));
+    const missing=rows.filter(r=>!existing.has(reservationIdentity(r)));
+    if(!missing.length){toast('Tutti i nominativi sono già presenti.');return}
+    if(!confirm(`Importare ${missing.length} nuovi nominativi senza eliminare quelli già presenti?`))return;
+
+    const updates={};
+    missing.forEach((r,i)=>{
+      const id=`import_${Date.now()}_${i}`;
+      const rawName=r.fullName||`${r.cognome||''} ${r.nome||''}`;
+      updates[`${DATA_ROOT}/reservations/${id}`]={
+        fullName:normalizeName(rawName).toLocaleUpperCase('it-IT'),
+        seats:Number.parseInt(r.seats,10)||1,
+        notes:String(r.notes||'').toLocaleUpperCase('it-IT'),
+        memberId:r.memberId||r.memberData?.id||'',
+        memberType:r.memberType||r.memberData?._tipo||'',
+        memberData:r.memberData||null,
+        surnameSort:surname(rawName),
+        createdAt:Number(r.createdAt)||Date.now()+i,
+        updatedAt:Date.now(),createdBy:user.uid,updatedBy:user.uid
+      };
+    });
+    await update(ref(db),firebaseSafe(updates));
+    toast(`${missing.length} nuovi nominativi importati.`);
+  }catch(err){
+    console.error('Errore lettura o formato JSON:',err);
+    if(err instanceof SyntaxError){
+      toast('File JSON non valido: il contenuto non è scritto correttamente.',true);
+    }else if(String(err?.message||'')==='FORMAT_NOT_RECOGNIZED'){
+      toast('Formato JSON non riconosciuto: il file non contiene soci, accompagnatori o prenotazioni compatibili.',true);
+    }else{
+      toast(firebaseImportErrorMessage(err),true);
+    }
+  }finally{
+    e.target.value='';
   }
-  const rows=Array.isArray(data)?data:(Array.isArray(data.reservations)?data.reservations:Object.values(data.reservations||{}));
-  if(!Array.isArray(rows)||!rows.length)throw new Error('Formato non riconosciuto');
-  const existing=new Set(reservations.map(reservationIdentity));
-  const missing=rows.filter(r=>!existing.has(reservationIdentity(r)));
-  if(!missing.length){toast('Tutti i nominativi sono già presenti.');return}
-  if(!confirm(`Importare ${missing.length} nuovi nominativi senza eliminare quelli già presenti?`))return;
-  const updates={};missing.forEach((r,i)=>{const id=`import_${Date.now()}_${i}`;updates[`${DATA_ROOT}/reservations/${id}`]={fullName:normalizeName(r.fullName||`${r.nome||''} ${r.cognome||''}`).toLocaleUpperCase('it-IT'),seats:Number.parseInt(r.seats,10)||1,notes:String(r.notes||'').toLocaleUpperCase('it-IT'),memberId:r.memberId||r.memberData?.id||'',memberType:r.memberType||r.memberData?._tipo||'',memberData:r.memberData||null,surnameSort:surname(r.fullName||`${r.nome||''} ${r.cognome||''}`),createdAt:Number(r.createdAt)||Date.now()+i,updatedAt:Date.now(),createdBy:user.uid,updatedBy:user.uid}});
-  try{
-    const cleanUpdates=firebaseSafe(updates);
-    await update(ref(db),cleanUpdates);
-  }catch(saveErr){
-    console.error('Errore salvataggio importazione nominativi:',saveErr);
-    toast(firebaseImportErrorMessage(saveErr),true);
-    return;
-  }
-  toast(`${missing.length} nuovi nominativi importati.`)
-}catch(err){
-  console.error('Errore lettura o formato JSON:',err);
-  const msg=err instanceof SyntaxError?'File JSON non valido: il contenuto non è scritto correttamente.':'Formato JSON non riconosciuto: il file non contiene un archivio o un backup compatibile.';
-  toast(msg,true)
-}finally{e.target.value=''}};
+};
 $('#addBtn').onclick=()=>openReservation();$('#search').oninput=render;$('#pdfBtn').onclick=()=>{menuPanel.classList.add('hidden');openPdfOptions()};$('#printBtn').onclick=()=>{menuPanel.classList.add('hidden');printList()};$('#reservationList').onclick=e=>{const position=e.target.closest('[data-position]'),edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(position)openPosition(reservations.find(r=>r.id===position.dataset.position));if(edit)openReservation(reservations.find(r=>r.id===edit.dataset.edit));if(del)openDelete(reservations.find(r=>r.id===del.dataset.delete))};
 window.addEventListener('online',()=>$('#offline').classList.add('hidden'));window.addEventListener('offline',()=>$('#offline').classList.remove('hidden'));$('#offline').classList.toggle('hidden',navigator.onLine);
 updateEventDisplay();
