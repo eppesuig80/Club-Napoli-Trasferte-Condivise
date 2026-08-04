@@ -1423,7 +1423,49 @@ html.firebase-ready #app{visibility:visible!important;opacity:1!important}
     font-size:16px !important;
   }
 }
-</style></head>
+</style>
+<style id="expiry-warning-style">
+.expiry-warning-overlay{
+  z-index:99999 !important;
+}
+.expiry-warning-modal{
+  width:min(100%,520px) !important;
+  border:2px solid #dc3545 !important;
+}
+.expiry-warning-text{
+  margin:18px 0 6px;
+  font-size:1.05rem;
+  font-weight:800;
+  line-height:1.45;
+  color:#213547;
+  text-align:center;
+}
+@media screen and (max-width:680px){
+  .expiry-warning-overlay{
+    padding:14px !important;
+    align-items:center !important;
+  }
+  .expiry-warning-modal{
+    width:100% !important;
+    max-width:430px !important;
+    padding:18px 14px !important;
+  }
+  .expiry-warning-text{
+    font-size:1rem;
+  }
+  .expiry-warning-modal .modal-actions{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:10px !important;
+  }
+  .expiry-warning-modal .btn{
+    width:100% !important;
+    min-height:48px !important;
+  }
+}
+</style>
+
+</head>
 <body>
 <div aria-live="polite" id="firebaseLoadingScreen" role="status"><div class="firebase-loading-box"><div aria-hidden="true" class="firebase-loading-spinner"></div><div class="firebase-loading-text">CARICAMENTO…</div></div></div>
 <div class="app" id="app">
@@ -1771,7 +1813,175 @@ async function saveManualReservation(e){
     await update(ref(db),updates);document.activeElement?.blur();$('#modalHost').innerHTML='';toast('Nominativo aggiunto alla trasferta e all’archivio generale.');
   }catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';err.classList.remove('hidden');$('#manualSaveBtn').disabled=false}
 }
-async function saveReservation(e){e.preventDefault();const typedName=normalizeName($('#fullName').value).toLocaleUpperCase('it-IT'),seats=Number.parseInt($('#seats').value,10),notes=$('#notes').value.trim().toLocaleUpperCase('it-IT'),err=$('#formError');if(!typedName||!Number.isInteger(seats)||seats<1){err.textContent=!typedName?'Inserisci cognome e nome.':'Il numero dei posti deve essere un intero maggiore di zero.';err.classList.remove('hidden');return}const memberData=selectedMember?JSON.parse(JSON.stringify(selectedMember)):(editing?.memberData||null);const name=memberData?memberLabel(memberData):typedName;const normalizedName=normalizeName(name).toLocaleUpperCase('it-IT');const duplicate=reservations.some(r=>r.id!==editing?.id&&((memberData?.id&&r.memberData?.id===memberData.id)||normalizeName(r.fullName||'').toLocaleUpperCase('it-IT')===normalizedName));if(duplicate){err.textContent='Socio già presente.';err.classList.remove('hidden');toast('Socio già presente.',true);return}$('#saveBtn').disabled=true;try{const now=Date.now(),payload={fullName:name,seats,notes,memberId:memberData?.id||'',memberType:memberData?._tipo||'',memberData,surnameSort:surname(name),updatedAt:now,updatedBy:user.uid};if(editing)await update(ref(db,`${DATA_ROOT}/reservations/${editing.id}`),payload);else{const ordered=sortRows(reservations,'oldest'),nextOrder=ordered.length?Math.max(...ordered.map((r,i)=>Number.isFinite(Number(r.order))?Number(r.order):i+1))+1:1;const newRef=push(ref(db,`${DATA_ROOT}/reservations`));await set(newRef,{...payload,order:nextOrder,createdAt:now,createdBy:user.uid})}document.activeElement?.blur();$('#modalHost').innerHTML='';toast(editing?'Nominativo modificato.':'Nominativo aggiunto.')}catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';err.classList.remove('hidden');$('#saveBtn').disabled=false}}
+
+function parseLocalExpiryDate(value){
+  const match=String(value||'').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!match)return null;
+  const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]);
+  const date=new Date(year,month-1,day);
+  if(
+    date.getFullYear()!==year||
+    date.getMonth()!==month-1||
+    date.getDate()!==day
+  )return null;
+  date.setHours(0,0,0,0);
+  return date;
+}
+function formatExpiryDate(value){
+  const date=parseLocalExpiryDate(value);
+  return date?new Intl.DateTimeFormat('it-IT',{
+    day:'2-digit',
+    month:'2-digit',
+    year:'numeric'
+  }).format(date):String(value||'');
+}
+function expiryWarningData(member){
+  const expiry=parseLocalExpiryDate(member?.scadenza);
+  if(!expiry)return null;
+
+  const today=new Date();
+  today.setHours(0,0,0,0);
+
+  const dayMs=24*60*60*1000;
+  const days=Math.round((expiry.getTime()-today.getTime())/dayMs);
+
+  if(days<0){
+    return {
+      status:'expired',
+      days,
+      message:`La Tessera del Tifoso di ${memberLabel(member)} è scaduta il ${formatExpiryDate(member.scadenza)}. Vuoi inserirlo comunque?`
+    };
+  }
+
+  if(days<=3){
+    const when=days===0
+      ? 'scade oggi'
+      : `scade tra ${days} ${days===1?'giorno':'giorni'}`;
+    return {
+      status:'expiring',
+      days,
+      message:`La Tessera del Tifoso di ${memberLabel(member)} ${when}, il ${formatExpiryDate(member.scadenza)}. Vuoi inserirlo comunque?`
+    };
+  }
+
+  return null;
+}
+function confirmExpiryWarning(member){
+  const warning=expiryWarningData(member);
+  if(!warning)return Promise.resolve(true);
+
+  return new Promise(resolve=>{
+    const overlay=document.createElement('div');
+    overlay.className='modal-bg expiry-warning-overlay';
+    overlay.innerHTML=`
+      <div class="modal expiry-warning-modal" role="dialog" aria-modal="true" aria-labelledby="expiryWarningTitle">
+        <div class="modal-head">
+          <h2 id="expiryWarningTitle">${warning.status==='expired'?'TESSERA SCADUTA':'TESSERA IN SCADENZA'}</h2>
+        </div>
+        <p class="expiry-warning-text">${esc(warning.message)}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" data-expiry-no>NO</button>
+          <button type="button" class="btn danger" data-expiry-yes>SÌ</button>
+        </div>
+      </div>`;
+
+    const close=value=>{
+      overlay.remove();
+      resolve(value);
+    };
+
+    overlay.querySelector('[data-expiry-no]').onclick=()=>close(false);
+    overlay.querySelector('[data-expiry-yes]').onclick=()=>close(true);
+    overlay.addEventListener('click',event=>{
+      if(event.target===overlay)close(false);
+    });
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-expiry-no]').focus();
+  });
+}
+
+async function saveReservation(e){
+  e.preventDefault();
+
+  const typedName=normalizeName($('#fullName').value).toLocaleUpperCase('it-IT');
+  const seats=Number.parseInt($('#seats').value,10);
+  const notes=$('#notes').value.trim().toLocaleUpperCase('it-IT');
+  const err=$('#formError');
+
+  if(!typedName||!Number.isInteger(seats)||seats<1){
+    err.textContent=!typedName
+      ?'Inserisci cognome e nome.'
+      :'Il numero dei posti deve essere un intero maggiore di zero.';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  const memberData=selectedMember
+    ?JSON.parse(JSON.stringify(selectedMember))
+    :(editing?.memberData||null);
+  const name=memberData?memberLabel(memberData):typedName;
+  const normalizedName=normalizeName(name).toLocaleUpperCase('it-IT');
+
+  const duplicate=reservations.some(r=>
+    r.id!==editing?.id&&(
+      (memberData?.id&&r.memberData?.id===memberData.id)||
+      normalizeName(r.fullName||'').toLocaleUpperCase('it-IT')===normalizedName
+    )
+  );
+
+  if(duplicate){
+    err.textContent='Socio già presente.';
+    err.classList.remove('hidden');
+    toast('Socio già presente.',true);
+    return;
+  }
+
+  if(!editing&&memberData?.scadenza){
+    const proceed=await confirmExpiryWarning(memberData);
+    if(!proceed)return;
+  }
+
+  $('#saveBtn').disabled=true;
+
+  try{
+    const now=Date.now();
+    const payload={
+      fullName:name,
+      seats,
+      notes,
+      memberId:memberData?.id||'',
+      memberType:memberData?._tipo||'',
+      memberData,
+      surnameSort:surname(name),
+      updatedAt:now,
+      updatedBy:user.uid
+    };
+
+    if(editing){
+      await update(ref(db,`${DATA_ROOT}/reservations/${editing.id}`),payload);
+    }else{
+      const ordered=sortRows(reservations,'oldest');
+      const nextOrder=ordered.length
+        ?Math.max(...ordered.map((r,i)=>Number.isFinite(Number(r.order))?Number(r.order):i+1))+1
+        :1;
+      const newRef=push(ref(db,`${DATA_ROOT}/reservations`));
+      await set(newRef,{
+        ...payload,
+        order:nextOrder,
+        createdAt:now,
+        createdBy:user.uid
+      });
+    }
+
+    document.activeElement?.blur();
+    $('#modalHost').innerHTML='';
+    toast(editing?'Nominativo modificato.':'Nominativo aggiunto.');
+  }catch(x){
+    err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';
+    err.classList.remove('hidden');
+    $('#saveBtn').disabled=false;
+  }
+}
 function openPosition(r){
   const rows=sortRows(reservations,'oldest');
   const currentIndex=rows.findIndex(x=>x.id===r.id);
