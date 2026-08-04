@@ -1927,8 +1927,19 @@ function formatExpiryDate(value){
   }).format(date):String(value||'');
 }
 
-function expiryWarningData(member){
-  const expiry=parseLocalExpiryDate(member?.scadenza);
+function fidelityWarningData(member){
+  if(!member)return null;
+
+  const card=String(member.tessera||'').trim();
+  if(!card){
+    return {
+      type:'missing',
+      title:'FIDELITY CARD NON PRESENTE',
+      reminderLabel:'FIDELITY NON PRESENTE'
+    };
+  }
+
+  const expiry=parseLocalExpiryDate(member.scadenza);
   if(!expiry)return null;
 
   const today=new Date();
@@ -1937,24 +1948,32 @@ function expiryWarningData(member){
   const dayMs=24*60*60*1000;
   const days=Math.round((expiry.getTime()-today.getTime())/dayMs);
 
-  return days<=3?{status:'expired',days}:null;
+  if(days<=3){
+    return {
+      type:'expired',
+      title:'FIDELITY CARD SCADUTA',
+      reminderLabel:'FIDELITY SCADUTA',
+      days
+    };
+  }
+
+  return null;
 }
-function confirmExpiryWarning(member){
-  const warning=expiryWarningData(member);
+function confirmFidelityWarning(warning){
   if(!warning)return Promise.resolve(true);
 
   return new Promise(resolve=>{
     const overlay=document.createElement('div');
     overlay.className='modal-bg expiry-warning-overlay';
     overlay.innerHTML=`
-      <div class="modal expiry-warning-modal" role="dialog" aria-modal="true" aria-labelledby="expiryWarningTitle">
+      <div class="modal expiry-warning-modal" role="dialog" aria-modal="true" aria-labelledby="fidelityWarningTitle">
         <div class="modal-head">
-          <h2 id="expiryWarningTitle">FIDELITY CARD SCADUTA</h2>
+          <h2 id="fidelityWarningTitle">${esc(warning.title)}</h2>
         </div>
         <p class="expiry-warning-text">VUOI INSERIRLO?</p>
         <div class="modal-actions">
-          <button type="button" class="btn secondary" data-expiry-no>NO</button>
-          <button type="button" class="btn danger" data-expiry-yes>SÌ</button>
+          <button type="button" class="btn secondary" data-fidelity-no>NO</button>
+          <button type="button" class="btn danger" data-fidelity-yes>SÌ</button>
         </div>
       </div>`;
 
@@ -1963,13 +1982,13 @@ function confirmExpiryWarning(member){
       resolve(value);
     };
 
-    overlay.querySelector('[data-expiry-no]').onclick=()=>close(false);
-    overlay.querySelector('[data-expiry-yes]').onclick=()=>close(true);
+    overlay.querySelector('[data-fidelity-no]').onclick=()=>close(false);
+    overlay.querySelector('[data-fidelity-yes]').onclick=()=>close(true);
     overlay.addEventListener('click',event=>{
       if(event.target===overlay)close(false);
     });
     document.body.appendChild(overlay);
-    overlay.querySelector('[data-expiry-no]').focus();
+    overlay.querySelector('[data-fidelity-no]').focus();
   });
 }
 function fidelityReminderKey(member){
@@ -1979,10 +1998,10 @@ function fidelityReminderKey(member){
     .replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'');
   return 'name_'+(raw||Date.now());
 }
-function fidelityReminderPayload(member){
+function fidelityReminderPayload(member,label){
   return {
     name:memberLabel(member),
-    label:'FIDELITY SCADUTA',
+    label:String(label||'FIDELITY SCADUTA'),
     memberId:String(member?.id||''),
     resolved:false,
     createdAt:Date.now(),
@@ -2013,7 +2032,7 @@ function openFidelityReminders(){
               <article class="fidelity-reminder-row">
                 <div>
                   <strong>${esc(item.name||'')}</strong>
-                  <span>FIDELITY SCADUTA</span>
+                  <span>${esc(item.label||'FIDELITY SCADUTA')}</span>
                 </div>
                 <button type="button" class="btn secondary" data-fidelity-resolve="${esc(item.id)}">
                   RISOLTO
@@ -2080,12 +2099,12 @@ async function saveReservation(e){
     return;
   }
 
-  const warning=!editing&&memberData?.scadenza
-    ?expiryWarningData(memberData)
+  const warning=!editing&&memberData
+    ?fidelityWarningData(memberData)
     :null;
 
   if(warning){
-    const proceed=await confirmExpiryWarning(memberData);
+    const proceed=await confirmFidelityWarning(warning);
     if(!proceed)return;
   }
 
@@ -2127,7 +2146,7 @@ async function saveReservation(e){
         const existing=fidelityReminders.find(item=>item.id===reminderKey&&!item.resolved);
         if(!existing){
           updates[`${DATA_ROOT}/fidelityReminders/${reminderKey}`]=
-            fidelityReminderPayload(memberData);
+            fidelityReminderPayload(memberData,warning.reminderLabel);
         }
       }
 
