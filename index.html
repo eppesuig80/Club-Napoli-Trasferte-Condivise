@@ -556,7 +556,9 @@ html,body{max-width:100%;overflow-x:hidden}.toolbar,.export,.list,.summary{width
 
 /* Anteprima stampa/PDF sempre leggibile anche con tema scuro */
 .print-preview-sheet,.print-preview-sheet *{color:#000!important}
-.print-preview-sheet{background:#fff!important}
+.print-preview-sheet{background:#fff!important;box-sizing:border-box;margin:0 auto}
+.print-preview-sheet[data-orientation="portrait"]{width:210mm;min-width:210mm;min-height:297mm}
+.print-preview-sheet[data-orientation="landscape"]{width:297mm;min-width:297mm;min-height:210mm}
 .print-preview-sheet .print-table th{background:#e9eef2!important;color:#000!important;border-color:#666!important}
 .print-preview-sheet .print-table td{background:#fff!important;color:#000!important;border-color:#777!important}
 .print-preview-sheet .print-brand strong{color:#102d44!important}
@@ -2179,25 +2181,25 @@ function exportColumns(options){const cols=[{key:'name',label:'Nome e cognome'}]
 function exportValue(r,key){if(key==='name')return r.fullName||'';if(key==='seats')return String(r.seats||1);if(key==='notes')return r.notes||'';return r.memberData?.[key]||''}
 function exportOptionFields(prefix){return `<fieldset class="option-group"><legend>DATI DA INCLUDERE</legend><label class="checkbox"><input id="${prefix}Cf" type="checkbox"> Codice fiscale</label><label class="checkbox"><input id="${prefix}Scadenza" type="checkbox"> Scadenza</label><label class="checkbox"><input id="${prefix}CodSic" type="checkbox"> COD. SIC</label></fieldset>`}
 function openPdfOptions(){
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>ESPORTA PDF</h2><button class="icon-btn" data-close>✕</button></div><form id="pdfOptionsForm"><label class="field">FONT DOCUMENTO<select id="pdfFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="pdfFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e provincia, tessera del tifoso.</p>${exportOptionFields('pdf')}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA PDF</button></div></form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>ESPORTA PDF</h2><button class="icon-btn" data-close>✕</button></div><form id="pdfOptionsForm"><label class="field">FONT DOCUMENTO<select id="pdfFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="pdfFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="pdfOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e provincia, tessera del tifoso.</p>${exportOptionFields('pdf')}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA PDF</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#pdfOptionsForm').onsubmit=e=>{e.preventDefault();openPdfPreview($('#pdfFont').value,Number($('#pdfFontSize').value)||9,{cf:$('#pdfCf').checked,scadenza:$('#pdfScadenza').checked,codSic:$('#pdfCodSic').checked})};
+  $('#pdfOptionsForm').onsubmit=e=>{e.preventDefault();openPdfPreview($('#pdfFont').value,Number($('#pdfFontSize').value)||9,$('#pdfOrientation').value,{cf:$('#pdfCf').checked,scadenza:$('#pdfScadenza').checked,codSic:$('#pdfCodSic').checked})};
 }
 function pdfCssFont(font){
   if(font==='times')return '"Times New Roman", Times, serif';
   if(font==='courier')return '"Courier New", Courier, monospace';
   return 'Arial, Helvetica, sans-serif';
 }
-function openPdfPreview(font,fontSize,options){
-  const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font);
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,980px)"><div class="modal-head"><h2>ANTEPRIMA PDF</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#fff"><div class="print-preview-sheet" style="padding:14px;font-family:${cssFont};font-size:${fontSize}pt;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 8px;font-family:${cssFont};font-size:${fontSize+5}pt;color:#000">${esc(eventTitle())}</h3><p style="text-align:center;font-family:${cssFont};font-size:${fontSize}pt;color:#000">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true,cssFont,fontSize)}</div></div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>INDIETRO</button><button id="confirmPdf" class="btn primary">SCARICA PDF</button></div></div></div>`;
+function openPdfPreview(font,fontSize,orientation,options){
+  const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font),pagePadding=orientation==='landscape'?'10mm':'10mm';
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,1100px)"><div class="modal-head"><h2>ANTEPRIMA PDF</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#d9dde2;padding:10px"><div class="print-preview-sheet" data-orientation="${orientation}" style="padding:${pagePadding};font-family:${cssFont};font-size:${fontSize}pt;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 8px;font-family:${cssFont};font-size:${fontSize+5}pt;color:#000">${esc(eventTitle())}</h3><p style="text-align:center;font-family:${cssFont};font-size:${fontSize}pt;color:#000">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true,cssFont,fontSize)}</div></div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>INDIETRO</button><button id="confirmPdf" class="btn primary">SCARICA PDF</button></div></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#confirmPdf').onclick=()=>generatePdf(font,fontSize,options);
+  $('#confirmPdf').onclick=()=>generatePdf(font,fontSize,orientation,options);
 }
-function generatePdf(font='helvetica',fontSize=9,options={}){
+function generatePdf(font='helvetica',fontSize=9,orientation='portrait',options={}){
   try{
     if(!window.jspdf?.jsPDF)throw new Error('jsPDF non disponibile');
-    const {jsPDF}=window.jspdf,rows=sortRows(reservations,'oldest'),cols=printColumns(options),orientation=cols.length>5?'landscape':'portrait',p=new jsPDF({unit:'mm',format:'a4',orientation}),pageWidth=p.internal.pageSize.getWidth(),margin=8,usableWidth=pageWidth-(margin*2);
+    const {jsPDF}=window.jspdf,rows=sortRows(reservations,'oldest'),cols=printColumns(options),p=new jsPDF({unit:'mm',format:'a4',orientation}),pageWidth=p.internal.pageSize.getWidth(),margin=8,usableWidth=pageWidth-(margin*2);
     p.setFont(font,'bold');p.setFontSize(Math.max(14,fontSize+5));p.text(eventTitle(),margin,14,{maxWidth:usableWidth});
     p.setFont(font,'normal');p.setFontSize(Math.max(8,fontSize));p.text(`Esportato il: ${fmt(new Date())}`,margin,20);p.text(`Persone aderenti: ${total()}`,margin,25,{maxWidth:usableWidth});
     p.autoTable({startY:30,margin:{left:margin,right:margin},tableWidth:usableWidth,head:[cols.map(c=>c.label)],body:rows.map(r=>cols.map(c=>printValue(r,c.key)||'—')),styles:{font,fontSize:fontSize,cellPadding:1.5,overflow:'linebreak',valign:'top'},headStyles:{fillColor:[6,106,168],fontStyle:'bold'},showHead:'everyPage'});
@@ -2348,28 +2350,32 @@ function printBrandHtml(){
   const logo=document.querySelector('.brand img')?.src||'';
   return `<div class="print-brand" style="background:#fff;color:#000"><img src="${logo}" alt="Logo"><div><strong style="color:#102d44">CLUB NAPOLI PARTENOPEI MODENA</strong><small style="color:#60798b">Gestione adesioni trasferte</small></div></div>`
 }
-function buildPrintArea(options){
-  const rows=sortRows(reservations,'oldest');
-  $('#printArea').innerHTML=`${printBrandHtml()}<h1>${esc(eventTitle())}</h1><p>Persone aderenti: ${total()}</p>${printTableHtml(rows,options)}`
+function buildPrintArea(options,font='helvetica',fontSize=9,orientation='portrait'){
+  const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font);
+  $('#printArea').innerHTML=`<div style="font-family:${cssFont};font-size:${fontSize}pt">${printBrandHtml()}<h1 style="font-family:${cssFont};font-size:${fontSize+7}pt">${esc(eventTitle())}</h1><p style="font-family:${cssFont};font-size:${fontSize}pt">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,false,cssFont,fontSize)}</div>`;
+  let printStyle=document.getElementById('dynamicPrintSettings');
+  if(!printStyle){printStyle=document.createElement('style');printStyle.id='dynamicPrintSettings';document.head.appendChild(printStyle)}
+  printStyle.textContent=`@media print{@page{size:A4 ${orientation};margin:14mm}.print-only,.print-only *{font-family:${cssFont}!important}.print-only table,.print-only th,.print-only td{font-size:${fontSize}pt!important}}`;
 }
 function openPrintOptions(){
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>OPZIONI DI STAMPA</h2><button class="icon-btn" data-close>✕</button></div><form id="printOptionsForm" style="display:grid;gap:15px;margin-top:16px"><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e CAP, tessera del tifoso.</p><p style="margin:0;color:#405b70;font-size:.86rem">Nel campo Residenza e CAP viene riportata la provincia di residenza presente nell’archivio.</p>${printOptionsFields()}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA</button></div></form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>OPZIONI DI STAMPA</h2><button class="icon-btn" data-close>✕</button></div><form id="printOptionsForm" style="display:grid;gap:15px;margin-top:16px"><label class="field">FONT DOCUMENTO<select id="printFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="printFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="printOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e CAP, tessera del tifoso.</p><p style="margin:0;color:#405b70;font-size:.86rem">Nel campo Residenza e CAP viene riportata la provincia di residenza presente nell’archivio.</p>${printOptionsFields()}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#printOptionsForm').onsubmit=e=>{e.preventDefault();openPrintPreview({cf:$('#printCf').checked,scadenza:$('#printScadenza').checked,codSic:$('#printCodSic').checked})};
+  $('#printOptionsForm').onsubmit=e=>{e.preventDefault();openPrintPreview($('#printFont').value,Number($('#printFontSize').value)||9,$('#printOrientation').value,{cf:$('#printCf').checked,scadenza:$('#printScadenza').checked,codSic:$('#printCodSic').checked})};
 }
-function openPrintPreview(options){
-  const rows=sortRows(reservations,'oldest');
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,900px)"><div class="modal-head"><h2>ANTEPRIMA STAMPA</h2><button class="icon-btn" data-close>✕</button></div><div style="margin-top:14px;max-height:55dvh;overflow:auto;border:1px solid #d5e3ec;border-radius:12px;padding:12px;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 10px;color:#000">${esc(eventTitle())}</h3><p style="text-align:center;font-size:.85rem;color:#000">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true)}</div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>CHIUDI</button><button id="confirmPrint" class="btn primary">STAMPA</button></div></div></div>`;
+function openPrintPreview(font,fontSize,orientation,options){
+  const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font);
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,1100px)"><div class="modal-head"><h2>ANTEPRIMA STAMPA</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#d9dde2;padding:10px"><div class="print-preview-sheet" data-orientation="${orientation}" style="padding:10mm;font-family:${cssFont};font-size:${fontSize}pt;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 10px;color:#000;font-family:${cssFont};font-size:${fontSize+5}pt">${esc(eventTitle())}</h3><p style="text-align:center;color:#000;font-family:${cssFont};font-size:${fontSize}pt">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true,cssFont,fontSize)}</div></div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>CHIUDI</button><button id="confirmPrint" class="btn primary">STAMPA</button></div></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
   $('#confirmPrint').onclick=async()=>{
-    buildPrintArea(options);
+    buildPrintArea(options,font,fontSize,orientation);
     const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if(!isMobile){$('#modalHost').innerHTML='';window.print();return}
     try{
-      const cols=printColumns(options),{jsPDF}=window.jspdf,orientation=cols.length>5?'landscape':'portrait',doc=new jsPDF({unit:'mm',format:'a4',orientation}),margin=8,pageWidth=doc.internal.pageSize.getWidth(),usableWidth=pageWidth-(margin*2);
-      doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(eventTitle(),margin,14,{maxWidth:usableWidth});
-      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(`Persone aderenti: ${total()}`,margin,20,{maxWidth:usableWidth});
-      doc.autoTable({startY:25,margin:{left:margin,right:margin},tableWidth:usableWidth,head:[cols.map(c=>c.label)],body:rows.map(r=>cols.map(c=>printValue(r,c.key)||'—')),styles:{font:'helvetica',fontSize:cols.length>7?5.5:7,cellPadding:1.2,overflow:'linebreak',valign:'top'},headStyles:{fillColor:[6,106,168],fontStyle:'bold'},showHead:'everyPage'});
+      if(!window.jspdf?.jsPDF)throw new Error('jsPDF non disponibile');
+      const cols=printColumns(options),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',orientation}),margin=8,pageWidth=doc.internal.pageSize.getWidth(),usableWidth=pageWidth-(margin*2);
+      doc.setFont(font,'bold');doc.setFontSize(Math.max(14,fontSize+5));doc.text(eventTitle(),margin,14,{maxWidth:usableWidth});
+      doc.setFont(font,'normal');doc.setFontSize(fontSize);doc.text(`Persone aderenti: ${total()}`,margin,20,{maxWidth:usableWidth});
+      doc.autoTable({startY:25,margin:{left:margin,right:margin},tableWidth:usableWidth,head:[cols.map(c=>c.label)],body:rows.map(r=>cols.map(c=>printValue(r,c.key)||'—')),styles:{font,fontSize,cellPadding:1.2,overflow:'linebreak',valign:'top'},headStyles:{fillColor:[6,106,168],fontStyle:'bold'},showHead:'everyPage'});
       const blob=doc.output('blob'),file=new File([blob],'Genoa-Napoli-22-08-2026-Stampa.pdf',{type:'application/pdf'});
       $('#modalHost').innerHTML='';
       if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]}))await navigator.share({files:[file],title:'Lista trasferta '+eventName});
