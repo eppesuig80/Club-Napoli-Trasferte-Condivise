@@ -1598,7 +1598,7 @@ html.firebase-ready #app{visibility:visible!important;opacity:1!important}
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import { getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-import { getDatabase, ref, onValue, push, set, update, remove } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+import { getDatabase, ref, onValue, push, set, update, remove, get } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCE-TRIl_pCqK1cbRrmEa-b64Wp1dTD8b4",
@@ -2471,7 +2471,11 @@ $('#importFile').onchange=async e=>{
 
     if(directoryRows.length){
       try{
-        const existingMap=new Map(MEMBER_DIRECTORY.map(m=>[directoryIdentity(m),m]));
+        // Legge l'archivio realmente salvato su Firebase al momento dell'importazione.
+        // In questo modo il conteggio non usa una copia locale/embedded non aggiornata.
+        const liveDirectorySnapshot=await get(ref(db,`${DATA_ROOT}/directory`));
+        const liveDirectory=Object.values(liveDirectorySnapshot.val()||{});
+        const existingMap=new Map(liveDirectory.map(m=>[directoryIdentity(m),m]));
         let added=0,changed=0,unchanged=0;
         const prepared=[];
 
@@ -2535,6 +2539,13 @@ $('#importFile').onchange=async e=>{
           return;
         }
         await update(ref(db),cleanUpdates);
+
+        // Sincronizza subito anche la copia usata dalla grafica, senza aspettare
+        // il successivo evento realtime di Firebase.
+        const refreshedDirectorySnapshot=await get(ref(db,`${DATA_ROOT}/directory`));
+        remoteDirectory=Object.values(refreshedDirectorySnapshot.val()||{});
+        mergeDirectory();
+
         toast(`Importazione completata: ${added} nuovi, ${changed} aggiornati, ${unchanged} invariati.`);
         return;
       }catch(saveErr){
