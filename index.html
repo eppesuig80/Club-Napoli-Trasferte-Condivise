@@ -1831,9 +1831,24 @@ function mergeImportedMember(existing,incoming){
   return merged;
 }
 function comparableMember(m){
-  const copy={...(m||{})};
-  delete copy.updatedAt;delete copy.updatedBy;delete copy.createdAt;delete copy.createdBy;
-  return JSON.stringify(copy,Object.keys(copy).sort());
+  const cleanComparable=value=>{
+    if(value===undefined||typeof value==='function'||typeof value==='symbol')return undefined;
+    if(value===null)return null;
+    if(typeof value==='number')return Number.isFinite(value)?value:'';
+    if(typeof value==='string'||typeof value==='boolean')return value;
+    if(Array.isArray(value))return value.map(cleanComparable).filter(v=>v!==undefined);
+    if(typeof value==='object'){
+      const out={};
+      Object.keys(value).sort().forEach(key=>{
+        if(['updatedAt','updatedBy','createdAt','createdBy'].includes(key))return;
+        const v=cleanComparable(value[key]);
+        if(v!==undefined)out[key]=v;
+      });
+      return out;
+    }
+    return String(value);
+  };
+  return JSON.stringify(cleanComparable(m||{}));
 }
 function firebaseSafe(value){
   if(value===undefined||typeof value==='function'||typeof value==='symbol')return undefined;
