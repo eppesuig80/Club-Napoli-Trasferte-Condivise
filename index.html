@@ -1850,6 +1850,35 @@ function comparableMember(m){
   };
   return JSON.stringify(cleanComparable(m||{}));
 }
+function importedMemberFingerprint(incoming){
+  const ignored=new Set(['updatedAt','updatedBy','createdAt','createdBy']);
+  const clean=value=>{
+    if(value===undefined||value===null)return undefined;
+    if(typeof value==='string'){
+      const v=value.trim();
+      return v===''?undefined:v;
+    }
+    if(typeof value==='number'||typeof value==='boolean')return value;
+    if(Array.isArray(value))return value.map(clean).filter(v=>v!==undefined);
+    if(typeof value==='object'){
+      const out={};
+      Object.keys(value).sort().forEach(key=>{
+        if(ignored.has(key))return;
+        const v=clean(value[key]);
+        if(v!==undefined && !(typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===0)) out[key]=v;
+      });
+      return Object.keys(out).length?out:undefined;
+    }
+    return String(value);
+  };
+  return JSON.stringify(clean(incoming||{})||{});
+}
+function importStateKey(identity){
+  let h=2166136261;
+  const s=String(identity||'');
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
+  return 'm_'+(h>>>0).toString(36);
+}
 function importedMemberHasChanges(current,incoming){
   const ignored=new Set(['updatedAt','updatedBy','createdAt','createdBy']);
   const normalizeCompare=value=>{
@@ -2511,8 +2540,12 @@ $('#importFile').onchange=async e=>{
       try{
         // Legge l'archivio realmente salvato su Firebase al momento dell'importazione.
         // In questo modo il conteggio non usa una copia locale/embedded non aggiornata.
-        const liveDirectorySnapshot=await get(ref(db,`${DATA_ROOT}/directory`));
+        const [liveDirectorySnapshot,importStateSnapshot]=await Promise.all([
+          get(ref(db,`${DATA_ROOT}/directory`)),
+          get(ref(db,`${DATA_ROOT}/importState/memberFingerprints`))
+        ]);
         const liveDirectoryRaw=liveDirectorySnapshot.val()||{};
+        const savedFingerprints=importStateSnapshot.val()||{};
         const existingMap=new Map();
         Object.entries(liveDirectoryRaw).forEach(([dbKey,m])=>{
           if(!m)return;
@@ -2544,7 +2577,9 @@ $('#importFile').onchange=async e=>{
             return;
           }
           const current=currentEntry.member;
-          if(!importedMemberHasChanges(current,incoming)){
+          const fingerprint=importedMemberFingerprint(incoming);
+          const stateKey=importStateKey(identity);
+          if(savedFingerprints[stateKey]===fingerprint || !importedMemberHasChanges(current,incoming)){
             unchanged++;
             return;
           }
@@ -2556,6 +2591,12 @@ $('#importFile').onchange=async e=>{
         });
 
         if(!added&&!changed){
+          const fingerprintUpdates={};
+          directoryRows.forEach(incoming=>{
+            const identity=directoryIdentity(incoming);
+            fingerprintUpdates[`${DATA_ROOT}/importState/memberFingerprints/${importStateKey(identity)}`]=importedMemberFingerprint(incoming);
+          });
+          if(Object.keys(fingerprintUpdates).length)await update(ref(db),firebaseSafe(fingerprintUpdates));
           toast(`Importazione completata: 0 nuovi, 0 aggiornati, ${unchanged} invariati.`);
           return;
         }
@@ -2563,6 +2604,10 @@ $('#importFile').onchange=async e=>{
         if(!confirm(`Importazione archivio:\n• ${added} nuovi nominativi\n• ${changed} nominativi da aggiornare\n• ${unchanged} invariati\n\nProcedere?`))return;
 
         const updates={};
+        directoryRows.forEach(incoming=>{
+          const identity=directoryIdentity(incoming);
+          updates[`${DATA_ROOT}/importState/memberFingerprints/${importStateKey(identity)}`]=importedMemberFingerprint(incoming);
+        });
         prepared.forEach(({member,dbKey})=>{
           updates[`${DATA_ROOT}/directory/${dbKey||directoryKey(member)}`]=member;
         });
