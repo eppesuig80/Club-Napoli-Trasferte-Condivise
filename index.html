@@ -2512,29 +2512,46 @@ $('#importFile').onchange=async e=>{
         // Legge l'archivio realmente salvato su Firebase al momento dell'importazione.
         // In questo modo il conteggio non usa una copia locale/embedded non aggiornata.
         const liveDirectorySnapshot=await get(ref(db,`${DATA_ROOT}/directory`));
-        const liveDirectory=Object.values(liveDirectorySnapshot.val()||{});
-        const existingMap=new Map(liveDirectory.map(m=>[directoryIdentity(m),m]));
+        const liveDirectoryRaw=liveDirectorySnapshot.val()||{};
+        const existingMap=new Map();
+        Object.entries(liveDirectoryRaw).forEach(([dbKey,m])=>{
+          if(!m)return;
+          const identity=directoryIdentity(m);
+          const candidate={member:m,dbKey};
+          const previous=existingMap.get(identity);
+          if(!previous){
+            existingMap.set(identity,candidate);
+            return;
+          }
+          const previousUpdated=Number(previous.member?.updatedAt)||0;
+          const candidateUpdated=Number(m?.updatedAt)||0;
+          if(candidateUpdated>previousUpdated||(candidateUpdated===previousUpdated&&memberDataScore(m)>memberDataScore(previous.member))){
+            existingMap.set(identity,candidate);
+          }
+        });
         let added=0,changed=0,unchanged=0;
         const prepared=[];
 
         directoryRows.forEach(incoming=>{
           const identity=directoryIdentity(incoming);
-          const current=existingMap.get(identity);
-          if(!current){
+          const currentEntry=existingMap.get(identity);
+          if(!currentEntry){
             const created={...incoming,updatedAt:Date.now(),updatedBy:user.uid};
-            prepared.push({kind:'new',member:created});
-            existingMap.set(identity,created);
+            const dbKey=directoryKey(created);
+            prepared.push({kind:'new',member:created,dbKey});
+            existingMap.set(identity,{member:created,dbKey});
             added++;
             return;
           }
+          const current=currentEntry.member;
           if(!importedMemberHasChanges(current,incoming)){
             unchanged++;
             return;
           }
           const merged=mergeImportedMember(current,incoming);
           merged.updatedBy=user.uid;
-          prepared.push({kind:'updated',member:merged,current});
-          existingMap.set(identity,merged);
+          prepared.push({kind:'updated',member:merged,current,dbKey:currentEntry.dbKey});
+          existingMap.set(identity,{member:merged,dbKey:currentEntry.dbKey});
           changed++;
         });
 
@@ -2546,17 +2563,17 @@ $('#importFile').onchange=async e=>{
         if(!confirm(`Importazione archivio:\n• ${added} nuovi nominativi\n• ${changed} nominativi da aggiornare\n• ${unchanged} invariati\n\nProcedere?`))return;
 
         const updates={};
-        prepared.forEach(({member})=>{
-          updates[`${DATA_ROOT}/directory/${directoryKey(member)}`]=member;
+        prepared.forEach(({member,dbKey})=>{
+          updates[`${DATA_ROOT}/directory/${dbKey||directoryKey(member)}`]=member;
         });
 
         reservations.forEach(r=>{
           let latest=null;
           const memberId=String(r.memberId||r.memberData?.id||'').trim();
-          if(memberId)latest=[...existingMap.values()].find(m=>String(m?.id||'').trim()===memberId)||null;
+          if(memberId)latest=[...existingMap.values()].map(x=>x.member).find(m=>String(m?.id||'').trim()===memberId)||null;
           if(!latest){
             const full=normalizePersonKey(r.fullName);
-            latest=[...existingMap.values()]
+            latest=[...existingMap.values()].map(x=>x.member)
               .filter(m=>normalizePersonKey(memberLabel(m))===full)
               .sort((a,b)=>memberDataScore(b)-memberDataScore(a))[0]||null;
           }
