@@ -1850,6 +1850,29 @@ function comparableMember(m){
   };
   return JSON.stringify(cleanComparable(m||{}));
 }
+function importedMemberHasChanges(current,incoming){
+  const ignored=new Set(['updatedAt','updatedBy','createdAt','createdBy']);
+  const normalizeCompare=value=>{
+    if(value===undefined||value===null)return '';
+    if(typeof value==='string')return value.trim();
+    if(typeof value==='number'||typeof value==='boolean')return value;
+    if(Array.isArray(value))return value.map(normalizeCompare);
+    if(typeof value==='object'){
+      const out={};
+      Object.keys(value).sort().forEach(key=>{
+        if(ignored.has(key))return;
+        const v=normalizeCompare(value[key]);
+        if(v!==''&&!(Array.isArray(v)&&!v.length))out[key]=v;
+      });
+      return out;
+    }
+    return String(value);
+  };
+  return Object.entries(incoming||{}).some(([key,value])=>{
+    if(ignored.has(key)||!hasImportedValue(value))return false;
+    return JSON.stringify(normalizeCompare(current?.[key]))!==JSON.stringify(normalizeCompare(value));
+  });
+}
 function firebaseSafe(value){
   if(value===undefined||typeof value==='function'||typeof value==='symbol')return undefined;
   if(value===null)return null;
@@ -2504,12 +2527,12 @@ $('#importFile').onchange=async e=>{
             added++;
             return;
           }
-          const merged=mergeImportedMember(current,incoming);
-          merged.updatedBy=user.uid;
-          if(comparableMember(merged)===comparableMember(current)){
+          if(!importedMemberHasChanges(current,incoming)){
             unchanged++;
             return;
           }
+          const merged=mergeImportedMember(current,incoming);
+          merged.updatedBy=user.uid;
           prepared.push({kind:'updated',member:merged,current});
           existingMap.set(identity,merged);
           changed++;
