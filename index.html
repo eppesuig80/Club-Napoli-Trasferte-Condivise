@@ -1795,11 +1795,12 @@ function sectorCheckboxes(prefix){return `<fieldset class="sector-choices"><lege
 function selectedSectors(){return [...document.querySelectorAll('[data-sector-choice]:checked')].map(x=>x.dataset.sectorChoice)}
 function sectorGroups(selected){return sectors.filter(s=>selected.includes(s.id)).map(s=>({...s,rows:sortRows(reservations.filter(r=>sectorId(r)===s.id),'oldest')}))}
 function groupCount(rows){return rows.reduce((n,r)=>n+Number(r.seats||1),0)}
-function sectorPrintBlock(g,options,font,fontSize,inline){const cssFont=pdfCssFont(font);return `<section class="sector-print-page" style="background:white;color:#000;${inline?'margin-bottom:30px;':''}">${printBrandHtml()}<h2 style="text-align:center;color:#000;margin:7px 0;font-size:${fontSize+6}pt">${esc(eventTitle())}</h2><div style="text-align:center;border-top:2px solid #066aa8;border-bottom:2px solid #066aa8;padding:9px;margin:8px 0 12px;color:#06396a;font-size:${fontSize+5}pt;font-weight:900">SETTORE ${esc(g.name)}</div><p style="text-align:center;color:#000;font-size:${fontSize}pt">Nominativi: ${g.rows.length} · Persone aderenti: ${groupCount(g.rows)}</p>${printTableHtml(g.rows,options,inline,cssFont,fontSize)}</section>`}
+function sectorPrintBlock(g,options,font,fontSize,inline){const cssFont=pdfCssFont(font);return `<section class="sector-print-page" style="background:white;color:#000;${inline?'margin-bottom:30px;':''}">${printBrandHtml()}<h2 style="text-align:center;color:#000;margin:7px 0;font-size:${fontSize+6}pt">${esc(eventTitle())}</h2><div style="text-align:center;border-top:2px solid #066aa8;border-bottom:2px solid #066aa8;padding:9px;margin:8px 0 12px;color:#06396a;font-size:${fontSize+5}pt;font-weight:900">SETTORE ${esc(g.name)}</div><p style="text-align:center;color:#000;font-size:${fontSize}pt">Nominativi: ${g.rows.length} · Persone aderenti: ${groupCount(g.rows)}</p>${printTableHtml(g.rows,sectorDocumentOptions(options,g.id),inline,cssFont,fontSize)}</section>`}
 function sectorPreviewHtml(groups,options,font,fontSize){return groups.map((g,i)=>`<div class="print-preview-sheet" style="padding:10mm;margin-bottom:18px;background:white;color:black;font-family:${pdfCssFont(font)};font-size:${fontSize}pt">${sectorPrintBlock(g,options,font,fontSize,true)}</div>`).join('')}
 function createSectorPdf(doc,groups,options,font,fontSize,exported=false){
- const cols=printColumns(options),width=doc.internal.pageSize.getWidth(),margin=8,usable=width-margin*2;
+ const width=doc.internal.pageSize.getWidth(),margin=8,usable=width-margin*2;
  groups.forEach((g,i)=>{
+  const cols=printColumns(sectorDocumentOptions(options,g.id));
   if(i)doc.addPage();
   doc.setFont(font,'bold');doc.setFontSize(Math.max(13,fontSize+5));doc.text(eventTitle(),margin,14,{maxWidth:usable});
   doc.setFont(font,'bold');doc.setFontSize(Math.max(13,fontSize+5));doc.text(`SETTORE ${g.name}`,margin,22,{maxWidth:usable});
@@ -2366,11 +2367,58 @@ function getExportOptions(prefix){
 }
 function exportColumns(options){const cols=[{key:'name',label:'Nome e cognome'}];if(options.cf)cols.push({key:'cf',label:'Codice fiscale'});if(options.scadenza)cols.push({key:'scadenza',label:'Scadenza'});if(options.codSic)cols.push({key:'codSic',label:'COD. SIC'});cols.push({key:'seats',label:'Persone'});if(options.notes)cols.push({key:'notes',label:'Note'});return cols}
 function exportValue(r,key){if(key==='name')return r.fullName||'';if(key==='seats')return String(r.seats||1);if(key==='notes')return r.notes||'';return r.memberData?.[key]||''}
-function exportOptionFields(prefix){return `<fieldset class="option-group"><legend>DATI DA INCLUDERE</legend><label class="checkbox"><input id="${prefix}Tessera" type="checkbox" checked> Tessera del tifoso</label><label class="checkbox"><input id="${prefix}Cf" type="checkbox"> Codice fiscale</label><label class="checkbox"><input id="${prefix}Scadenza" type="checkbox"> Scadenza</label><label class="checkbox"><input id="${prefix}CodSic" type="checkbox"> COD. SIC</label></fieldset>`}
+// Opzioni facoltative separate per ciascun settore, comuni alla stampa e all'esportazione.
+const SECTOR_PRINT_STORAGE='trasfertaOpzioniPerSettore_v1';
+const SECTOR_PRINT_KEYS=[['tessera','Tessera del tifoso'],['cf','Codice fiscale'],['scadenza','Scadenza'],['codSic','COD. SIC']];
+function loadSectorPrintPrefs(){
+ try{const data=JSON.parse(localStorage.getItem(SECTOR_PRINT_STORAGE)||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?data:{}}catch{return {}}
+}
+function saveSectorPrintPref(id,values){
+ try{const data=loadSectorPrintPrefs();data[id]=values;localStorage.setItem(SECTOR_PRINT_STORAGE,JSON.stringify(data))}catch(e){console.warn('Impossibile memorizzare le opzioni di stampa locali.',e)}
+}
+function sectorDefaultPrintOptions(id){
+ const saved=loadSectorPrintPrefs()[id]||{};
+ return Object.fromEntries(SECTOR_PRINT_KEYS.map(([key])=>[key,typeof saved[key]==='boolean'?saved[key]:key==='tessera']));
+}
+function sectorOptionFields(prefix){
+ return `<div class="sector-per-options" data-sector-options-container="${prefix}" style="display:grid;gap:12px"><strong>DATI FACOLTATIVI PER SETTORE</strong>${sectors.map(s=>{
+   const chosen=sectorDefaultPrintOptions(s.id);
+   return `<fieldset class="option-group" data-sector-options="${esc(s.id)}" style="display:${s.id==='ospiti'?'grid':'none'}"><legend>${esc(s.name)}</legend>${SECTOR_PRINT_KEYS.map(([key,label])=>`<label class="checkbox"><input type="checkbox" data-sector-parameter="${key}" ${chosen[key]?'checked':''}> ${label}</label>`).join('')}</fieldset>`;
+ }).join('')}</div>`;
+}
+function setupSectorOptionFields(prefix){
+ const root=document.querySelector(`[data-sector-options-container="${prefix}"]`);
+ if(!root)return;
+ const refresh=()=>{
+   const chosen=new Set(selectedSectors());
+   root.querySelectorAll('[data-sector-options]').forEach(panel=>{panel.style.display=chosen.has(panel.dataset.sectorOptions)?'grid':'none'});
+ };
+ document.querySelectorAll('[data-sector-choice]').forEach(x=>x.addEventListener('change',refresh));
+ root.querySelectorAll('[data-sector-parameter]').forEach(input=>input.addEventListener('change',()=>{
+   const panel=input.closest('[data-sector-options]');
+   if(!panel)return;
+   const values=Object.fromEntries([...panel.querySelectorAll('[data-sector-parameter]')].map(x=>[x.dataset.sectorParameter,x.checked]));
+   saveSectorPrintPref(panel.dataset.sectorOptions,values);
+ }));
+ refresh();
+}
+function selectedSectorPrintOptions(prefix){
+ const root=document.querySelector(`[data-sector-options-container="${prefix}"]`);
+ const chosen=selectedSectors(),bySector={};
+ chosen.forEach(id=>{
+   const panel=[...(root?.querySelectorAll('[data-sector-options]')||[])].find(x=>x.dataset.sectorOptions===id);
+   bySector[id]=panel?Object.fromEntries([...panel.querySelectorAll('[data-sector-parameter]')].map(x=>[x.dataset.sectorParameter,x.checked])):sectorDefaultPrintOptions(id);
+   saveSectorPrintPref(id,bySector[id]);
+ });
+ return {sectors:chosen,bySector};
+}
+function sectorDocumentOptions(options,id){return options.bySector?.[id]||options}
+function exportOptionFields(prefix){return sectorOptionFields(prefix)}
 function openPdfOptions(){
   $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>ESPORTA PDF</h2><button class="icon-btn" data-close>✕</button></div><form id="pdfOptionsForm"><label class="field">FONT DOCUMENTO<select id="pdfFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="pdfFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="pdfOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e provincia.</p>${sectorCheckboxes('pdf')}${exportOptionFields('pdf')}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA PDF</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#pdfOptionsForm').onsubmit=e=>{e.preventDefault();const selected=selectedSectors();if(!selected.length){toast('Seleziona almeno un settore.',true);return}openPdfPreview($('#pdfFont').value,Number($('#pdfFontSize').value)||9,$('#pdfOrientation').value,{tessera:$('#pdfTessera').checked,cf:$('#pdfCf').checked,scadenza:$('#pdfScadenza').checked,codSic:$('#pdfCodSic').checked,sectors:selected})};
+  setupSectorOptionFields('pdf');
+  $('#pdfOptionsForm').onsubmit=e=>{e.preventDefault();const selected=selectedSectors();if(!selected.length){toast('Seleziona almeno un settore.',true);return}openPdfPreview($('#pdfFont').value,Number($('#pdfFontSize').value)||9,$('#pdfOrientation').value,selectedSectorPrintOptions('pdf'))};
 }
 function pdfCssFont(font){
   if(font==='times')return '"Times New Roman", Times, serif';
@@ -2519,9 +2567,7 @@ function printValue(r,key){
   if(key==='notes')return r.notes||'';
   return m[key]??''
 }
-function printOptionsFields(){
-  return `<fieldset class="option-group"><legend>DATI FACOLTATIVI</legend><label class="checkbox"><input id="printTessera" type="checkbox" checked> Tessera del tifoso</label><label class="checkbox"><input id="printCf" type="checkbox"> Codice fiscale</label><label class="checkbox"><input id="printScadenza" type="checkbox"> Scadenza</label><label class="checkbox"><input id="printCodSic" type="checkbox"> COD. SIC</label></fieldset>`
-}
+function printOptionsFields(){return sectorOptionFields('print')}
 function printTableHtml(rows,options,inline=false,previewFont='',previewSize=''){
   const cols=printColumns(options);
   const family=previewFont?`font-family:${previewFont};`:'';
@@ -2544,7 +2590,8 @@ function buildPrintArea(options,font='helvetica',fontSize=9,orientation='portrai
 function openPrintOptions(){
   $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>OPZIONI DI STAMPA</h2><button class="icon-btn" data-close>✕</button></div><form id="printOptionsForm" style="display:grid;gap:15px;margin-top:16px"><label class="field">FONT DOCUMENTO<select id="printFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="printFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="printOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e CAP.</p><p style="margin:0;color:#405b70;font-size:.86rem">Nel campo Residenza e CAP viene riportata la provincia di residenza presente nell’archivio.</p>${sectorCheckboxes('print')}${printOptionsFields()}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#printOptionsForm').onsubmit=e=>{e.preventDefault();const selected=selectedSectors();if(!selected.length){toast('Seleziona almeno un settore.',true);return}openPrintPreview($('#printFont').value,Number($('#printFontSize').value)||9,$('#printOrientation').value,{tessera:$('#printTessera').checked,cf:$('#printCf').checked,scadenza:$('#printScadenza').checked,codSic:$('#printCodSic').checked,sectors:selected})};
+  setupSectorOptionFields('print');
+  $('#printOptionsForm').onsubmit=e=>{e.preventDefault();const selected=selectedSectors();if(!selected.length){toast('Seleziona almeno un settore.',true);return}openPrintPreview($('#printFont').value,Number($('#printFontSize').value)||9,$('#printOrientation').value,selectedSectorPrintOptions('print'))};
 }
 function openPrintPreview(font,fontSize,orientation,options){
  const groups=sectorGroups(options.sectors||['ospiti']);
