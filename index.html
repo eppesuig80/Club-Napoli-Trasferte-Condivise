@@ -1029,6 +1029,23 @@ html.firebase-ready #app{visibility:visible!important;opacity:1!important}
     column-gap:12px!important;
   }
 }
+
+/* Settori della trasferta: schede e controlli responsive */
+.list .card{grid-template-columns:minmax(0,1fr) repeat(4,36px)}
+.sector-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:13px 0 4px}
+.sector-tab{border:1px solid #3496ce;border-radius:11px;padding:10px 13px;background:#092c53;color:#d4f1ff;font-size:.83rem;font-weight:850;min-height:43px}
+.sector-tab.active{background:#0878db;color:#fff;box-shadow:0 4px 14px #0878db55}
+.sector-manage{margin-left:auto;background:transparent;border:1px solid #57b9f6;border-radius:11px;color:#b8eaff;font-weight:800;padding:10px 12px;min-height:43px}
+.sector-summary{font-size:.8rem;color:#a8c9e0;margin:7px 0 5px}
+.sector-choices{display:grid;gap:8px;padding:11px;border:1px solid var(--line);border-radius:12px}
+.sector-choice{display:flex;align-items:center;gap:9px;font-size:.9rem;font-weight:750;cursor:pointer}
+.sector-choice input{width:19px;height:19px}
+.sector-manage-row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:9px;border:1px solid var(--line);border-radius:11px;margin:7px 0;flex-wrap:wrap}
+.sector-manage-row .btn{min-height:35px;width:auto;padding:6px 10px}
+.sector-print-page{break-before:page;page-break-before:always}
+.sector-print-page:first-child{break-before:auto;page-break-before:auto}
+@media(max-width:600px){.list .card{grid-template-columns:minmax(0,1fr) repeat(4,30px);gap:4px}.list .card-action{width:30px;height:30px}.sector-bar{gap:6px}.sector-tab{font-size:.72rem;padding:9px}.sector-manage{margin-left:0;font-size:.75rem}}
+@media print{.sector-bar,.sector-summary{display:none!important}.sector-print-page{display:block!important}.sector-print-page:not(:first-child){break-before:page!important;page-break-before:always!important}}
 </style>
 <style id="team-layout-clean-final">
 .event-heading.event-heading-pro{position:relative!important;min-height:440px!important;padding:0!important;overflow:hidden!important}
@@ -1564,6 +1581,7 @@ html.firebase-ready #app{visibility:visible!important;opacity:1!important}
 </div>
 </div>
 </section>
+<nav id="sectorTabs" class="sector-bar" aria-label="Settori dello stadio"></nav><div id="sectorSummary" class="sector-summary"></div>
 <section class="toolbar"><div class="search">🔎<input id="search" placeholder="CERCA NOMINATIVO"/></div></section>
 <div class="list-head">
 <div class="list-head-main"><h2>NOMINATIVI</h2><small id="listCount">0 nominativi</small></div>
@@ -1598,7 +1616,7 @@ html.firebase-ready #app{visibility:visible!important;opacity:1!important}
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
 import { getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-import { getDatabase, ref, onValue, push, set, update, remove, get } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
+import { getDatabase, ref, onValue, push, set, update, remove, get, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCE-TRIl_pCqK1cbRrmEa-b64Wp1dTD8b4",
@@ -1630,6 +1648,7 @@ const EMBEDDED_MEMBER_DIRECTORY=[{"cf":"BTALRA72H62F839E","codSic":"HN0L3U","cog
 let MEMBER_DIRECTORY=[...EMBEDDED_MEMBER_DIRECTORY];
 let remoteDirectory=[];
 let refreshMemberSuggestions=null;
+let sectors=[{id:"ospiti",name:"OSPITI"}],activeSector="ospiti";
 let auth,db,user=null,reservations=[],fidelityReminders=[],maxSeats=DEFAULT_MAX,editing=null,deleting=null,selectedMember=null,unsubSettings=null,unsubReservations=null,unsubDirectory=null,unsubFidelityReminders=null;
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalizeName=s=>s.trim().replace(/\s+/g,' ');
@@ -1756,6 +1775,81 @@ function safeFilePart(v){return String(v||'evento').normalize('NFD').replace(/[�
 async function openEventEditor(){menuPanel.classList.add('hidden');$('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>MODIFICA EVENTO</h2><button class="icon-btn" data-close>✕</button></div><form id="eventForm"><label class="field">STAGIONE<select id="eventSeasonInput"><option value="2026/2027" ${eventSeason==='2026/2027'?'selected':''}>2026/2027</option><option value="2027/2028" ${eventSeason==='2027/2028'?'selected':''}>2027/2028</option></select><small class="season-note">Il catalogo 2026/2027 comprende Serie A, Champions League ed Europa League. Il 2027/2028 potrà essere aggiornato con un nuovo JSON squadre.</small></label><label class="field">NOME EVENTO<input id="eventNameInput" required value="${esc(eventName)}" autocapitalize="characters" style="text-transform:uppercase" placeholder="ES. GENOA - NAPOLI"></label><label class="field">DATA<div style="width:100%;border:1px solid #b9ccd9;border-radius:12px;background:white;padding:13px"><input id="eventDateInput" type="date" value="${esc(eventDate)}" style="width:100%;border:0;background:transparent;padding:0"></div></label><label class="field">ORARIO<div style="width:100%;border:1px solid #b9ccd9;border-radius:12px;background:white;padding:13px"><input id="eventTimeInput" type="time" value="${esc(eventTime)}" style="width:100%;border:0;background:transparent;padding:0"></div></label><div id="eventError" class="error hidden"></div><div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">SALVA</button></div></form></div></div>`;document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');$('#eventForm').onsubmit=async e=>{e.preventDefault();const name=normalizeName($('#eventNameInput').value).toLocaleUpperCase('it-IT'),date=$('#eventDateInput').value,time=$('#eventTimeInput').value,season=$('#eventSeasonInput').value,err=$('#eventError');if(!name){err.textContent='Inserisci il nome dell’evento.';err.classList.remove('hidden');return}const [a,b]=splitEventTeams(name);if(!a||!b){err.textContent='Scrivi le due squadre separate da un trattino, per esempio GENOA - NAPOLI.';err.classList.remove('hidden');return}try{await set(ref(db,`${DATA_ROOT}/settings/event`),{name,date,time,season,updatedAt:Date.now(),updatedBy:user.uid});$('#modalHost').innerHTML='';toast('Evento e loghi aggiornati.')}catch{err.textContent='Salvataggio non riuscito.';err.classList.remove('hidden')}}}
 
 function toast(msg,err=false){const t=$('#toast');t.textContent=msg;t.className='toast'+(err?' err':'');setTimeout(()=>t.classList.add('hidden'),3200)}
+
+// Gestione settori: ID stabile, OSPITI sempre presente, dati preesistenti in OSPITI.
+const defaultSector=()=>({id:'ospiti',name:'OSPITI'});
+function sectorId(row){return String(row?.sectorId||'ospiti')}
+function sectorName(id){return sectors.find(s=>s.id===id)?.name||'OSPITI'}
+function activeSectorRows(){return reservations.filter(r=>sectorId(r)===activeSector)}
+function sectorOptions(selected='ospiti'){return sectors.map(s=>`<option value="${esc(s.id)}" ${s.id===selected?'selected':''}>${esc(s.name)}</option>`).join('')}
+function renderSectorTabs(){
+ const el=$('#sectorTabs');if(!el)return;
+ if(!sectors.some(s=>s.id===activeSector))activeSector='ospiti';
+ el.innerHTML=sectors.map(s=>{const rs=reservations.filter(r=>sectorId(r)===s.id);return `<button type="button" class="sector-tab ${activeSector===s.id?'active':''}" data-sector-tab="${esc(s.id)}">${esc(s.name)} (${rs.length})</button>`}).join('')+'<button type="button" class="sector-manage" id="manageSectorsBtn">⚙ GESTISCI SETTORI</button>';
+ el.querySelectorAll('[data-sector-tab]').forEach(b=>b.onclick=()=>{activeSector=b.dataset.sectorTab;render()});
+ $('#manageSectorsBtn').onclick=openSectorManager;
+ const count=activeSectorRows().reduce((n,r)=>n+Number(r.seats||1),0);
+ $('#sectorSummary').textContent=`SETTORE ${sectorName(activeSector)} · ${activeSectorRows().length} nominativi · ${count} adesioni`;
+}
+function sectorCheckboxes(prefix){return `<fieldset class="sector-choices"><legend style="font-weight:900;padding:0 5px">SETTORI DA INCLUDERE</legend>${sectors.map((s,i)=>`<label class="sector-choice"><input type="checkbox" data-sector-choice="${esc(s.id)}" ${s.id==='ospiti'?'checked':''}>${esc(s.name)} (${reservations.filter(r=>sectorId(r)===s.id).length})</label>`).join('')}</fieldset>`}
+function selectedSectors(){return [...document.querySelectorAll('[data-sector-choice]:checked')].map(x=>x.dataset.sectorChoice)}
+function sectorGroups(selected){return sectors.filter(s=>selected.includes(s.id)).map(s=>({...s,rows:sortRows(reservations.filter(r=>sectorId(r)===s.id),'oldest')}))}
+function groupCount(rows){return rows.reduce((n,r)=>n+Number(r.seats||1),0)}
+function sectorPrintBlock(g,options,font,fontSize,inline){const cssFont=pdfCssFont(font);return `<section class="sector-print-page" style="background:white;color:#000;${inline?'margin-bottom:30px;':''}">${printBrandHtml()}<h2 style="text-align:center;color:#000;margin:7px 0;font-size:${fontSize+6}pt">${esc(eventTitle())}</h2><div style="text-align:center;border-top:2px solid #066aa8;border-bottom:2px solid #066aa8;padding:9px;margin:8px 0 12px;color:#06396a;font-size:${fontSize+5}pt;font-weight:900">SETTORE ${esc(g.name)}</div><p style="text-align:center;color:#000;font-size:${fontSize}pt">Nominativi: ${g.rows.length} · Persone aderenti: ${groupCount(g.rows)}</p>${printTableHtml(g.rows,options,inline,cssFont,fontSize)}</section>`}
+function sectorPreviewHtml(groups,options,font,fontSize){return groups.map((g,i)=>`<div class="print-preview-sheet" style="padding:10mm;margin-bottom:18px;background:white;color:black;font-family:${pdfCssFont(font)};font-size:${fontSize}pt">${sectorPrintBlock(g,options,font,fontSize,true)}</div>`).join('')}
+function createSectorPdf(doc,groups,options,font,fontSize,exported=false){
+ const cols=printColumns(options),width=doc.internal.pageSize.getWidth(),margin=8,usable=width-margin*2;
+ groups.forEach((g,i)=>{
+  if(i)doc.addPage();
+  doc.setFont(font,'bold');doc.setFontSize(Math.max(13,fontSize+5));doc.text(eventTitle(),margin,14,{maxWidth:usable});
+  doc.setFont(font,'bold');doc.setFontSize(Math.max(13,fontSize+5));doc.text(`SETTORE ${g.name}`,margin,22,{maxWidth:usable});
+  doc.setFont(font,'normal');doc.setFontSize(Math.max(8,fontSize));doc.text(`Nominativi: ${g.rows.length} - Persone aderenti: ${groupCount(g.rows)}`,margin,29,{maxWidth:usable});
+  doc.autoTable({startY:34,margin:{left:margin,right:margin},tableWidth:usable,head:[cols.map(c=>c.label)],body:g.rows.map(r=>cols.map(c=>printValue(r,c.key)||'—')),styles:{font,fontSize,cellPadding:1.3,overflow:'linebreak',valign:'top'},headStyles:{fillColor:[6,106,168],fontStyle:'bold'},showHead:'everyPage'});
+ });
+}
+function openSectorManager(){
+ $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>GESTISCI SETTORI</h2><button class="icon-btn" data-close>✕</button></div><div style="margin-top:15px">${sectors.map(s=>`<div class="sector-manage-row"><b>${esc(s.name)}</b>${s.id==='ospiti'?'<small>Predefinito · non eliminabile</small>':`<span><button class="btn secondary" type="button" data-rename-sector="${esc(s.id)}">RINOMINA</button> <button class="btn danger" type="button" data-remove-sector="${esc(s.id)}">ELIMINA</button></span>`}</div>`).join('')}</div><form id="addSectorForm" style="margin-top:15px"><label class="field">NUOVO SETTORE<input id="newSectorName" maxlength="45" placeholder="ES. CURVA" required></label><button class="btn primary">AGGIUNGI SETTORE</button></form><div class="modal-actions"><button type="button" class="btn secondary" data-close>CHIUDI</button></div></div></div>`;
+ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
+ $('#addSectorForm').onsubmit=async e=>{e.preventDefault();const name=normalizeName($('#newSectorName').value).toLocaleUpperCase('it-IT');if(!name)return;if(sectors.some(s=>normalizeListSearch(s.name)===normalizeListSearch(name))){toast('Settore già esistente.',true);return}const id=push(ref(db,`${DATA_ROOT}/settings/sectors`)).key;try{await runTransaction(ref(db,`${DATA_ROOT}/settings/sectors`),current=>{const map=current||{};if(Object.values(map).some(x=>normalizeListSearch(x?.name)===normalizeListSearch(name)))return;return {...map,[id]:{name}}});openSectorManager();toast('Settore aggiunto.')}catch{toast('Impossibile salvare il settore.',true)}};
+ document.querySelectorAll('[data-rename-sector]').forEach(b=>b.onclick=async()=>{const id=b.dataset.renameSector,old=sectorName(id),name=prompt('Nuovo nome del settore',old);if(name===null)return;const clean=normalizeName(name).toLocaleUpperCase('it-IT');if(!clean||sectors.some(s=>s.id!==id&&normalizeListSearch(s.name)===normalizeListSearch(clean))){toast('Nome non valido o già presente.',true);return}try{await update(ref(db,`${DATA_ROOT}/settings/sectors/${id}`),{name:clean});openSectorManager()}catch{toast('Rinomina non riuscita.',true)}});
+ document.querySelectorAll('[data-remove-sector]').forEach(b=>b.onclick=async()=>{const id=b.dataset.removeSector,rows=reservations.filter(r=>sectorId(r)===id);if(rows.some(r=>findDuplicate(r,r.id,reservations.filter(x=>sectorId(x)==='ospiti'))?.match==='same')){toast('Esistono nominativi duplicati con OSPITI: risolvi prima di eliminare il settore.',true);return}if(!confirm(`Eliminare ${sectorName(id)}? ${rows.length} nominativi verranno trasferiti in OSPITI, senza essere cancellati.`))return;try{const changes={};rows.forEach(r=>changes[`${DATA_ROOT}/reservations/${r.id}/sectorId`]='ospiti');changes[`${DATA_ROOT}/settings/sectors/${id}`]=null;await update(ref(db),changes);if(activeSector===id)activeSector='ospiti';$('#modalHost').innerHTML='';toast('Settore eliminato. Nominativi trasferiti in OSPITI.')}catch{toast('Eliminazione non riuscita.',true)}});
+}
+function personNameKey(row){const m=row?.memberData||{};return normalizeListSearch(m.nome&&m.cognome?`${m.cognome} ${m.nome}`:(row?.fullName||''))}
+function personBirth(row){return String(row?.memberData?.dataNascita||row?.dataNascita||'').trim()}
+function samePerson(a,b){
+ const aId=String(a?.memberId||a?.memberData?.id||''),bId=String(b?.memberId||b?.memberData?.id||'');
+ if(aId&&bId&&aId===bId)return 'same';
+ if(!personNameKey(a)||personNameKey(a)!==personNameKey(b))return 'different';
+ const ab=personBirth(a),bb=personBirth(b);
+ if(ab&&bb)return ab===bb?'same':'different';
+ return 'verify';
+}
+function findDuplicate(candidate,exceptId='',rows=reservations){for(const r of rows){if(r.id===exceptId)continue;const match=samePerson(candidate,r);if(match!=='different')return {row:r,match}}return null}
+async function confirmPotentialDuplicate(candidate,exceptId=''){
+ const duplicate=findDuplicate(candidate,exceptId);if(!duplicate)return true;
+ const where=sectorName(sectorId(duplicate.row));
+ if(duplicate.match==='same'){toast(`Nominativo già presente nel settore ${where}. Usa SPOSTA SETTORE.`,true);return false}
+ toast(`Possibile omonimia con ${duplicate.row.fullName} in ${where}: manca una data di nascita.`,true);
+ return confirm(`Esiste già ${duplicate.row.fullName} nel settore ${where}. Almeno una data di nascita manca: hai verificato che siano persone diverse?`);
+}
+async function writeReservationUniquely(id,payload,oldId=''){
+ let blocked='';
+ const result=await runTransaction(ref(db,`${DATA_ROOT}/reservations`),current=>{
+  const all=current||{};if(oldId&&!all[id]){blocked='Il nominativo non è più presente. Aggiorna la lista.';return}const rows=Object.entries(all).map(([key,value])=>({id:key,...value}));
+  const collision=findDuplicate(payload,oldId||id,rows);
+  if(collision&&collision.match==='same'){blocked=`Nominativo già presente in ${sectorName(sectorId(collision.row))}`;return}
+  if(collision&&collision.match==='verify'&&!payload._confirmedOmonym){blocked='Dati di nascita incompleti: verifica omonimia';return}
+  const clean={...payload};delete clean._confirmedOmonym;
+  return {...all,[id]:oldId?{...all[id],...clean}:clean};
+ },{applyLocally:false});
+ if(!result.committed)throw new Error(blocked||'Salvataggio annullato per duplicato.');
+}
+function openMoveSector(r){
+ $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>SPOSTA SETTORE</h2><button class="icon-btn" data-close>✕</button></div><form id="moveSectorForm"><p><b>${esc(r.fullName)}</b><br>Settore attuale: ${esc(sectorName(sectorId(r)))}</p><label class="field">NUOVO SETTORE<select id="moveSectorSelect">${sectorOptions(sectorId(r))}</select></label><div id="moveSectorError" class="error hidden"></div><div class="modal-actions"><button class="btn secondary" type="button" data-close>ANNULLA</button><button class="btn primary">SPOSTA</button></div></form></div></div>`;
+ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
+ $('#moveSectorForm').onsubmit=async e=>{e.preventDefault();const target=$('#moveSectorSelect').value;if(!sectors.some(s=>s.id===target))return;if(target===sectorId(r)){$('#modalHost').innerHTML='';return}try{await writeReservationUniquely(r.id,{sectorId:target,updatedAt:Date.now(),updatedBy:user.uid},r.id);activeSector=target;$('#modalHost').innerHTML='';render();toast(`Nominativo spostato in ${sectorName(target)}.`)}catch(err){$('#moveSectorError').textContent=err.message;$('#moveSectorError').classList.remove('hidden')}};
+}
+
 function total(){return reservations.reduce((s,r)=>s+Number(r.seats||0),0)}
 const STAFF_PRIORITY=[
   'SOLA LUIGI',
@@ -1792,7 +1886,7 @@ function matchesReservationSearch(r,query){
   const names=[r?.fullName,member?.cognome&&member?.nome?`${member.cognome} ${member.nome}`:'',member?.nome&&member?.cognome?`${member.nome} ${member.cognome}`:''];
   return names.some(name=>normalizeListSearch(name).includes(query));
 }
-function render(){const t=total();$('#totalSeats').textContent=t;const q=normalizeListSearch($('#search').value);const rows=sortRows(reservations.filter(r=>matchesReservationSearch(r,q)),'oldest');$('#listCount').textContent=`${rows.length} nominativ${rows.length===1?'o':'i'}`;const list=$('#reservationList');if(!rows.length){list.innerHTML='<div class="empty">Nessun nominativo trovato.</div>';return}list.innerHTML=rows.map(r=>{const seats=Math.max(1,Number.parseInt(r.seats,10)||1),notes=String(r.notes||'').trim();return `<article class="card"><div class="card-main"><h3>${esc(r.fullName)}</h3><span class="badge" title="Numero posti">${seats} ${seats===1?'posto':'posti'}</span></div><button class="card-action" data-position="${r.id}" aria-label="Cambia posizione di ${esc(r.fullName)}" title="Posizione">↕</button><button class="card-action" data-edit="${r.id}" aria-label="Modifica ${esc(r.fullName)}" title="Modifica">✎</button><button class="card-action delete" data-delete="${r.id}" aria-label="Elimina ${esc(r.fullName)}" title="Elimina">🗑</button>${notes?`<p><strong>Note:</strong> ${esc(notes)}</p>`:''}</article>`}).join('')}
+function render(){renderSectorTabs();const t=groupCount(activeSectorRows());$('#totalSeats').textContent=t;const q=normalizeListSearch($('#search').value);const rows=sortRows(activeSectorRows().filter(r=>matchesReservationSearch(r,q)),'oldest');$('#listCount').textContent=`${rows.length} nominativ${rows.length===1?'o':'i'}`;const list=$('#reservationList');if(!rows.length){list.innerHTML='<div class="empty">Nessun nominativo trovato.</div>';return}list.innerHTML=rows.map(r=>{const seats=Math.max(1,Number.parseInt(r.seats,10)||1),notes=String(r.notes||'').trim();return `<article class="card"><div class="card-main"><h3>${esc(r.fullName)}</h3><span class="badge" title="Numero posti">${seats} ${seats===1?'posto':'posti'}</span></div><button class="card-action" data-move-sector="${r.id}" aria-label="Sposta settore di ${esc(r.fullName)}" title="Sposta settore">⇄</button><button class="card-action" data-position="${r.id}" aria-label="Cambia posizione di ${esc(r.fullName)}" title="Posizione">↕</button><button class="card-action" data-edit="${r.id}" aria-label="Modifica ${esc(r.fullName)}" title="Modifica">✎</button><button class="card-action delete" data-delete="${r.id}" aria-label="Elimina ${esc(r.fullName)}" title="Elimina">🗑</button>${notes?`<p><strong>Note:</strong> ${esc(notes)}</p>`:''}</article>`}).join('')}
 function memberLabel(m){return `${m.cognome||''} ${m.nome||''}`.trim().toLocaleUpperCase('it-IT')}
 function memberDetails(m){const bits=[m._tipo,m.dataNascita?`Nato/a: ${m.dataNascita}`:'',m.residenza?`Residenza: ${m.residenza}${m.provResidenza?` (${m.provResidenza})`:''}`:''];return bits.filter(Boolean).join(' • ')}
 function directoryKey(m){
@@ -1944,7 +2038,7 @@ function openReservation(r=null){
   const actionButtons=r
     ? `<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button id="saveBtn" class="btn primary">SALVA</button></div>`
     : `<div class="modal-actions with-manual"><button type="button" class="btn secondary" data-close>ANNULLA</button><button type="button" id="manualAddBtn" class="btn secondary manual-add-btn">AGGIUNGI<br>MANUALMENTE</button><button id="saveBtn" class="btn primary">SALVA</button></div>`;
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>${r?'MODIFICA NOMINATIVO':'AGGIUNGI NOMINATIVO'}</h2><button class="icon-btn" data-close>✕</button></div><form id="reservationForm"><label class="field">COGNOME E NOME<div class="member-search-wrap"><input id="fullName" required autocomplete="off" autocapitalize="characters" style="text-transform:uppercase" value="${esc(r?.fullName||'')}" placeholder="COGNOME E NOME"><small style="display:block;margin-top:6px;color:#60798b;font-weight:700">Cerca nell’archivio soci e accompagnatori</small><div id="memberSuggestions" class="member-suggestions hidden"></div></div></label><div id="selectedMemberInfo" class="selected-member ${selectedMember?'':'hidden'}">${selectedMember?esc(`${memberLabel(selectedMember)} — ${selectedMember._tipo}`):''}</div><label class="field">NUMERO POSTI<input id="seats" type="number" min="1" step="1" inputmode="numeric" required value="${Number.parseInt(r?.seats,10)||1}"></label><label class="field">NOTE<textarea id="notes" rows="4" autocapitalize="characters" style="text-transform:uppercase">${esc(r?.notes||'')}</textarea></label><div id="formError" class="error hidden"></div>${actionButtons}</form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>${r?'MODIFICA NOMINATIVO':'AGGIUNGI NOMINATIVO'}</h2><button class="icon-btn" data-close>✕</button></div><form id="reservationForm"><label class="field">COGNOME E NOME<div class="member-search-wrap"><input id="fullName" required autocomplete="off" autocapitalize="characters" style="text-transform:uppercase" value="${esc(r?.fullName||'')}" placeholder="COGNOME E NOME"><small style="display:block;margin-top:6px;color:#60798b;font-weight:700">Cerca nell’archivio soci e accompagnatori</small><div id="memberSuggestions" class="member-suggestions hidden"></div></div></label><div id="selectedMemberInfo" class="selected-member ${selectedMember?'':'hidden'}">${selectedMember?esc(`${memberLabel(selectedMember)} — ${selectedMember._tipo}`):''}</div><label class="field">SETTORE<select id="reservationSector">${sectorOptions(r?sectorId(r):'ospiti')}</select></label><label class="field">NUMERO POSTI<input id="seats" type="number" min="1" step="1" inputmode="numeric" required value="${Number.parseInt(r?.seats,10)||1}"></label><label class="field">NOTE<textarea id="notes" rows="4" autocapitalize="characters" style="text-transform:uppercase">${esc(r?.notes||'')}</textarea></label><div id="formError" class="error hidden"></div>${actionButtons}</form></div></div>`;
   const input=$('#fullName'),box=$('#memberSuggestions'),info=$('#selectedMemberInfo');
   const normalizeSearch=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('it-IT').trim();
   const showSuggestions=()=>{
@@ -1968,14 +2062,14 @@ function openReservation(r=null){
   input.addEventListener('focus',showSuggestions);
   box.addEventListener('click',e=>{const b=e.target.closest('[data-member-index]');if(!b)return;selectedMember=MEMBER_DIRECTORY[Number(b.dataset.memberIndex)];input.value=memberLabel(selectedMember);info.textContent=`${memberLabel(selectedMember)} — ${selectedMember._tipo}`;info.classList.remove('hidden');box.classList.add('hidden')});
   $('#notes').addEventListener('input',e=>{const p=e.target.selectionStart;e.target.value=e.target.value.toLocaleUpperCase('it-IT');e.target.setSelectionRange(p,p)});
-  if($('#manualAddBtn'))$('#manualAddBtn').onclick=()=>openManualReservation({seats:Number.parseInt($('#seats').value,10)||1,notes:$('#notes').value||'',fullName:$('#fullName').value||''});
+  if($('#manualAddBtn'))$('#manualAddBtn').onclick=()=>openManualReservation({seats:Number.parseInt($('#seats').value,10)||1,notes:$('#notes').value||'',fullName:$('#fullName').value||'',sectorId:$('#reservationSector').value});
   $('#reservationForm').onsubmit=saveReservation;document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='')
 }
 function manualId(){return (globalThis.crypto?.randomUUID?.()||`manual-${Date.now()}-${Math.random().toString(36).slice(2,9)}`)}
 function openManualReservation(prefill={}){
   editing=null;selectedMember=null;
   const guessed=normalizeName(prefill.fullName||'').split(' ').filter(Boolean),guessedSurname=guessed.length>1?guessed.pop():'',guessedName=guessed.join(' ');
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>AGGIUNGI MANUALMENTE</h2><button class="icon-btn" data-close>✕</button></div><form id="manualReservationForm"><div class="manual-form-grid"><label class="field">TIPO<select id="manualType" required><option value="SOCIO">SOCIO</option><option value="ACCOMPAGNATORE">ACCOMPAGNATORE</option></select></label><label class="field">SESSO<select id="manualSex"><option value="">NON INDICATO</option><option value="M">M</option><option value="F">F</option></select></label><label class="field">NOME<input id="manualName" required value="${esc(guessedName)}"></label><label class="field">COGNOME<input id="manualSurname" required value="${esc(guessedSurname)}"></label><label class="field">DATA DI NASCITA<input id="manualBirthDate" type="date"></label><label class="field">LUOGO DI NASCITA<input id="manualBirthPlace"></label><label class="field">PROVINCIA DI NASCITA<input id="manualBirthProvince" maxlength="2" placeholder="NA"></label><label class="field">RESIDENZA<input id="manualResidence"></label><label class="field">PROVINCIA DI RESIDENZA<input id="manualResidenceProvince" maxlength="2" placeholder="MO"></label><label class="field">CODICE FISCALE<input id="manualCf" maxlength="16"></label><label class="field">TESSERA DEL TIFOSO<input id="manualCard"></label><label class="field">SCADENZA<input id="manualExpiry" type="date"></label><label class="field">COD. SIC<input id="manualSic"></label><label class="field">NUMERO POSTI<input id="manualSeats" type="number" min="1" step="1" inputmode="numeric" required value="${Number.parseInt(prefill.seats,10)||1}"></label><label class="field full">NOTE<textarea id="manualNotes" rows="3">${esc(prefill.notes||'')}</textarea></label></div><div id="manualFormError" class="error hidden"></div><div class="modal-actions"><button type="button" class="btn secondary" id="backToSearchBtn">INDIETRO</button><button id="manualSaveBtn" class="btn primary">SALVA</button></div></form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>AGGIUNGI MANUALMENTE</h2><button class="icon-btn" data-close>✕</button></div><form id="manualReservationForm"><div class="manual-form-grid"><label class="field">TIPO<select id="manualType" required><option value="SOCIO">SOCIO</option><option value="ACCOMPAGNATORE">ACCOMPAGNATORE</option></select></label><label class="field">SESSO<select id="manualSex"><option value="">NON INDICATO</option><option value="M">M</option><option value="F">F</option></select></label><label class="field">NOME<input id="manualName" required value="${esc(guessedName)}"></label><label class="field">COGNOME<input id="manualSurname" required value="${esc(guessedSurname)}"></label><label class="field">DATA DI NASCITA<input id="manualBirthDate" type="date"></label><label class="field">LUOGO DI NASCITA<input id="manualBirthPlace"></label><label class="field">PROVINCIA DI NASCITA<input id="manualBirthProvince" maxlength="2" placeholder="NA"></label><label class="field">RESIDENZA<input id="manualResidence"></label><label class="field">PROVINCIA DI RESIDENZA<input id="manualResidenceProvince" maxlength="2" placeholder="MO"></label><label class="field">CODICE FISCALE<input id="manualCf" maxlength="16"></label><label class="field">TESSERA DEL TIFOSO<input id="manualCard"></label><label class="field">SCADENZA<input id="manualExpiry" type="date"></label><label class="field">COD. SIC<input id="manualSic"></label><label class="field">SETTORE<select id="manualSector">${sectorOptions(prefill.sectorId||'ospiti')}</select></label><label class="field">NUMERO POSTI<input id="manualSeats" type="number" min="1" step="1" inputmode="numeric" required value="${Number.parseInt(prefill.seats,10)||1}"></label><label class="field full">NOTE<textarea id="manualNotes" rows="3">${esc(prefill.notes||'')}</textarea></label></div><div id="manualFormError" class="error hidden"></div><div class="modal-actions"><button type="button" class="btn secondary" id="backToSearchBtn">INDIETRO</button><button id="manualSaveBtn" class="btn primary">SALVA</button></div></form></div></div>`;
   ['manualName','manualSurname','manualBirthPlace','manualBirthProvince','manualResidence','manualResidenceProvince','manualCf','manualCard','manualSic','manualNotes'].forEach(id=>{$('#'+id).addEventListener('input',e=>{const p=e.target.selectionStart;e.target.value=e.target.value.toLocaleUpperCase('it-IT');if(typeof p==='number')e.target.setSelectionRange(p,p)})});
   $('#backToSearchBtn').onclick=()=>openReservation();
   $('#manualReservationForm').onsubmit=saveManualReservation;
@@ -1986,17 +2080,16 @@ async function saveManualReservation(e){
   const err=$('#manualFormError'),nome=normalizeName($('#manualName').value).toLocaleUpperCase('it-IT'),cognome=normalizeName($('#manualSurname').value).toLocaleUpperCase('it-IT'),seats=Number.parseInt($('#manualSeats').value,10);
   if(!nome||!cognome||!Number.isInteger(seats)||seats<1){err.textContent=(!nome||!cognome)?'Inserisci nome e cognome.':'Il numero dei posti deve essere maggiore di zero.';err.classList.remove('hidden');return}
   const type=$('#manualType').value,normalizedFull=`${cognome} ${nome}`.trim();
-  const archiveDuplicate=MEMBER_DIRECTORY.some(m=>normalizeName(memberLabel(m)).toLocaleUpperCase('it-IT')===normalizedFull&&String(m.dataNascita||'')===String($('#manualBirthDate').value||''));
-  const listDuplicate=reservations.some(r=>normalizeName(r.fullName||'').toLocaleUpperCase('it-IT')===normalizedFull);
-  if(archiveDuplicate||listDuplicate){err.textContent=archiveDuplicate?'Nominativo già presente nell’archivio.':'Socio già presente.';err.classList.remove('hidden');toast(err.textContent,true);return}
   const now=Date.now(),member={id:manualId(),nome,cognome,dataNascita:$('#manualBirthDate').value||'',luogo:normalizeName($('#manualBirthPlace').value).toLocaleUpperCase('it-IT'),prov:normalizeName($('#manualBirthProvince').value).toLocaleUpperCase('it-IT'),residenza:normalizeName($('#manualResidence').value).toLocaleUpperCase('it-IT'),provResidenza:normalizeName($('#manualResidenceProvince').value).toLocaleUpperCase('it-IT'),sesso:$('#manualSex').value||'',cf:normalizeName($('#manualCf').value).toLocaleUpperCase('it-IT'),tessera:normalizeName($('#manualCard').value).toLocaleUpperCase('it-IT'),scadenza:$('#manualExpiry').value||'',codSic:normalizeName($('#manualSic').value).toLocaleUpperCase('it-IT'),rinnovi:{},evidenziato:false,_tipo:type,createdAt:now,createdBy:user.uid};
-  $('#manualSaveBtn').disabled=true;
   try{
     const ordered=sortRows(reservations,'oldest'),nextOrder=ordered.length?Math.max(...ordered.map((r,i)=>Number.isFinite(Number(r.order))?Number(r.order):i+1))+1:1,newRef=push(ref(db,`${DATA_ROOT}/reservations`));
-    const reservation={fullName:normalizedFull,seats,notes:$('#manualNotes').value.trim().toLocaleUpperCase('it-IT'),memberId:member.id,memberType:type,memberData:member,surnameSort:surname(normalizedFull),order:nextOrder,createdAt:now,createdBy:user.uid,updatedAt:now,updatedBy:user.uid};
-    const updates={};updates[`${DATA_ROOT}/directory/${directoryKey(member)}`]=member;updates[`${DATA_ROOT}/reservations/${newRef.key}`]=reservation;
-    await update(ref(db),updates);document.activeElement?.blur();$('#modalHost').innerHTML='';toast('Nominativo aggiunto alla trasferta e all’archivio generale.');
-  }catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';err.classList.remove('hidden');$('#manualSaveBtn').disabled=false}
+    const reservation={fullName:normalizedFull,seats,notes:$('#manualNotes').value.trim().toLocaleUpperCase('it-IT'),sectorId:$('#manualSector').value,memberId:member.id,memberType:type,memberData:member,surnameSort:surname(normalizedFull),order:nextOrder,createdAt:now,createdBy:user.uid,updatedAt:now,updatedBy:user.uid};
+    const collision=findDuplicate(reservation);
+    if(collision){if(collision.match==='same')throw new Error(`Già presente nel settore ${sectorName(sectorId(collision.row))}`);if(!confirm('Esiste già un omonimo con data di nascita mancante. Hai verificato che sia una persona diversa?'))return;reservation._confirmedOmonym=true;}
+    $('#manualSaveBtn').disabled=true;
+    await writeReservationUniquely(newRef.key,reservation);
+    await set(ref(db,`${DATA_ROOT}/directory/${directoryKey(member)}`),member);document.activeElement?.blur();$('#modalHost').innerHTML='';toast('Nominativo aggiunto alla trasferta e all’archivio generale.');
+  }catch(x){err.textContent=x?.message||'Salvataggio non riuscito. Controlla la connessione e riprova.';err.classList.remove('hidden');$('#manualSaveBtn').disabled=false}
 }
 
 function parseLocalExpiryDate(value){
@@ -2179,18 +2272,16 @@ async function saveReservation(e){
   const name=memberData?memberLabel(memberData):typedName;
   const normalizedName=normalizeName(name).toLocaleUpperCase('it-IT');
 
-  const duplicate=reservations.some(r=>
-    r.id!==editing?.id&&(
-      (memberData?.id&&r.memberData?.id===memberData.id)||
-      normalizeName(r.fullName||'').toLocaleUpperCase('it-IT')===normalizedName
-    )
-  );
-
-  if(duplicate){
-    err.textContent='Socio già presente.';
-    err.classList.remove('hidden');
-    toast('Socio già presente.',true);
-    return;
+  const candidate={fullName:name,memberData,memberId:memberData?.id||'',sectorId:$('#reservationSector').value};
+  const conflict=findDuplicate(candidate,editing?.id);
+  if(conflict&&conflict.match==='same'){
+    err.textContent=`Nominativo già presente in ${sectorName(sectorId(conflict.row))}. Per trasferirlo usa SPOSTA SETTORE.`;
+    err.classList.remove('hidden');return;
+  }
+  let confirmedOmonym=false;
+  if(conflict&&conflict.match==='verify'){
+    if(!confirm(`Esiste un possibile omonimo in ${sectorName(sectorId(conflict.row))}, con data di nascita mancante. Hai verificato che siano due persone diverse?`))return;
+    confirmedOmonym=true;
   }
 
   const warning=!editing&&memberData
@@ -2208,6 +2299,8 @@ async function saveReservation(e){
     const now=Date.now();
     const payload={
       fullName:name,
+      sectorId:$('#reservationSector').value,
+      _confirmedOmonym:confirmedOmonym,
       seats,
       notes,
       memberId:memberData?.id||'',
@@ -2219,7 +2312,7 @@ async function saveReservation(e){
     };
 
     if(editing){
-      await update(ref(db,`${DATA_ROOT}/reservations/${editing.id}`),payload);
+      await writeReservationUniquely(editing.id,payload,editing.id);
     }else{
       const ordered=sortRows(reservations,'oldest');
       const nextOrder=ordered.length
@@ -2228,7 +2321,7 @@ async function saveReservation(e){
       const newRef=push(ref(db,`${DATA_ROOT}/reservations`));
       const updates={};
 
-      updates[`${DATA_ROOT}/reservations/${newRef.key}`]={
+      const newReservation={
         ...payload,
         order:nextOrder,
         manualOrder:ordered.some(row=>row.manualOrder===true),
@@ -2245,20 +2338,21 @@ async function saveReservation(e){
         }
       }
 
-      await update(ref(db),updates);
+      await writeReservationUniquely(newRef.key,newReservation);
+      if(Object.keys(updates).length)await update(ref(db),updates);
     }
 
     document.activeElement?.blur();
     $('#modalHost').innerHTML='';
     toast(editing?'Nominativo modificato.':'Nominativo aggiunto.');
   }catch(x){
-    err.textContent='Salvataggio non riuscito. Controlla la connessione e riprova.';
+    err.textContent=x?.message||'Salvataggio non riuscito. Controlla la connessione e riprova.';
     err.classList.remove('hidden');
     $('#saveBtn').disabled=false;
   }
 }
 function openPosition(r){
-  const rows=sortRows(reservations,'oldest');
+  const rows=sortRows(activeSectorRows(),'oldest');
   const currentIndex=rows.findIndex(x=>x.id===r.id);
   const currentPosition=currentIndex>=0?currentIndex+1:1;
   $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>CAMBIA POSIZIONE</h2><button class="icon-btn" data-close>✕</button></div><form id="positionForm"><p><b>${esc(r.fullName)}</b></p><label class="field">NUOVA POSIZIONE<input id="positionInput" type="number" min="1" max="${rows.length}" step="1" inputmode="numeric" required value="${currentPosition}"></label><div id="positionError" class="error hidden"></div><div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">SPOSTA</button></div></form></div></div>`;
@@ -2274,9 +2368,9 @@ function exportColumns(options){const cols=[{key:'name',label:'Nome e cognome'}]
 function exportValue(r,key){if(key==='name')return r.fullName||'';if(key==='seats')return String(r.seats||1);if(key==='notes')return r.notes||'';return r.memberData?.[key]||''}
 function exportOptionFields(prefix){return `<fieldset class="option-group"><legend>DATI DA INCLUDERE</legend><label class="checkbox"><input id="${prefix}Tessera" type="checkbox" checked> Tessera del tifoso</label><label class="checkbox"><input id="${prefix}Cf" type="checkbox"> Codice fiscale</label><label class="checkbox"><input id="${prefix}Scadenza" type="checkbox"> Scadenza</label><label class="checkbox"><input id="${prefix}CodSic" type="checkbox"> COD. SIC</label></fieldset>`}
 function openPdfOptions(){
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>ESPORTA PDF</h2><button class="icon-btn" data-close>✕</button></div><form id="pdfOptionsForm"><label class="field">FONT DOCUMENTO<select id="pdfFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="pdfFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="pdfOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e provincia.</p>${exportOptionFields('pdf')}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA PDF</button></div></form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>ESPORTA PDF</h2><button class="icon-btn" data-close>✕</button></div><form id="pdfOptionsForm"><label class="field">FONT DOCUMENTO<select id="pdfFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="pdfFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="pdfOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e provincia.</p>${sectorCheckboxes('pdf')}${exportOptionFields('pdf')}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA PDF</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#pdfOptionsForm').onsubmit=e=>{e.preventDefault();openPdfPreview($('#pdfFont').value,Number($('#pdfFontSize').value)||9,$('#pdfOrientation').value,{tessera:$('#pdfTessera').checked,cf:$('#pdfCf').checked,scadenza:$('#pdfScadenza').checked,codSic:$('#pdfCodSic').checked})};
+  $('#pdfOptionsForm').onsubmit=e=>{e.preventDefault();const selected=selectedSectors();if(!selected.length){toast('Seleziona almeno un settore.',true);return}openPdfPreview($('#pdfFont').value,Number($('#pdfFontSize').value)||9,$('#pdfOrientation').value,{tessera:$('#pdfTessera').checked,cf:$('#pdfCf').checked,scadenza:$('#pdfScadenza').checked,codSic:$('#pdfCodSic').checked,sectors:selected})};
 }
 function pdfCssFont(font){
   if(font==='times')return '"Times New Roman", Times, serif';
@@ -2284,20 +2378,18 @@ function pdfCssFont(font){
   return 'Arial, Helvetica, sans-serif';
 }
 function openPdfPreview(font,fontSize,orientation,options){
-  const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font),pagePadding=orientation==='landscape'?'10mm':'10mm';
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,1100px)"><div class="modal-head"><h2>ANTEPRIMA PDF</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#d9dde2;padding:10px"><div class="print-preview-sheet" data-orientation="${orientation}" style="padding:${pagePadding};font-family:${cssFont};font-size:${fontSize}pt;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 8px;font-family:${cssFont};font-size:${fontSize+5}pt;color:#000">${esc(eventTitle())}</h3><p style="text-align:center;font-family:${cssFont};font-size:${fontSize}pt;color:#000">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true,cssFont,fontSize)}</div></div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>INDIETRO</button><button id="confirmPdf" class="btn primary">SCARICA PDF</button></div></div></div>`;
-  document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#confirmPdf').onclick=()=>generatePdf(font,fontSize,orientation,options);
+ const groups=sectorGroups(options.sectors||['ospiti']);
+ $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,1100px)"><div class="modal-head"><h2>ANTEPRIMA PDF</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#d9dde2;padding:10px">${sectorPreviewHtml(groups,options,font,fontSize)}</div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>CHIUDI</button><button id="confirmPdf" class="btn primary">SCARICA PDF</button></div></div></div>`;
+ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
+ $('#confirmPdf').onclick=()=>generatePdf(font,fontSize,orientation,options);
 }
 function generatePdf(font='helvetica',fontSize=9,orientation='portrait',options={}){
-  try{
-    if(!window.jspdf?.jsPDF)throw new Error('jsPDF non disponibile');
-    const {jsPDF}=window.jspdf,rows=sortRows(reservations,'oldest'),cols=printColumns(options),p=new jsPDF({unit:'mm',format:'a4',orientation}),pageWidth=p.internal.pageSize.getWidth(),margin=8,usableWidth=pageWidth-(margin*2);
-    p.setFont(font,'bold');p.setFontSize(Math.max(14,fontSize+5));p.text(eventTitle(),margin,14,{maxWidth:usableWidth});
-    p.setFont(font,'normal');p.setFontSize(Math.max(8,fontSize));p.text(`Esportato il: ${fmt(new Date())}`,margin,20);p.text(`Persone aderenti: ${total()}`,margin,25,{maxWidth:usableWidth});
-    p.autoTable({startY:30,margin:{left:margin,right:margin},tableWidth:usableWidth,head:[cols.map(c=>c.label)],body:rows.map(r=>cols.map(c=>printValue(r,c.key)||'—')),styles:{font,fontSize:fontSize,cellPadding:1.5,overflow:'linebreak',valign:'top'},headStyles:{fillColor:[6,106,168],fontStyle:'bold'},showHead:'everyPage'});
-    p.save(`${safeFilePart(eventName)}-${eventDate||'senza-data'}-Elenco-Aderenti.pdf`);$('#modalHost').innerHTML='';toast('PDF creato.');
-  }catch(err){console.error(err);toast('Esportazione PDF non riuscita. Controlla la connessione e riprova.',true)}
+ try{
+  if(!window.jspdf?.jsPDF)throw new Error('jsPDF non disponibile');
+  const {jsPDF}=window.jspdf,p=new jsPDF({unit:'mm',format:'a4',orientation});
+  createSectorPdf(p,sectorGroups(options.sectors||['ospiti']),options,font,fontSize,true);
+  p.save(`${safeFilePart(eventName)}-${eventDate||'senza-data'}-Elenco-Aderenti.pdf`);$('#modalHost').innerHTML='';toast('PDF creato.');
+ }catch(err){console.error(err);toast('Esportazione PDF non riuscita. Controlla la connessione e riprova.',true)}
 }
 function formatRenewals(value){
   if(!value||typeof value!=='object')return '';
@@ -2444,41 +2536,38 @@ function printBrandHtml(){
   return `<div class="print-brand" style="background:#fff;color:#000"><img src="${logo}" alt="Logo"><div><strong style="color:#102d44">CLUB NAPOLI PARTENOPEI MODENA</strong><small style="color:#60798b">Gestione adesioni trasferte</small></div></div>`
 }
 function buildPrintArea(options,font='helvetica',fontSize=9,orientation='portrait'){
-  const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font);
-  $('#printArea').innerHTML=`<div style="font-family:${cssFont};font-size:${fontSize}pt">${printBrandHtml()}<h1 style="font-family:${cssFont};font-size:${fontSize+7}pt">${esc(eventTitle())}</h1><p style="font-family:${cssFont};font-size:${fontSize}pt">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,false,cssFont,fontSize)}</div>`;
-  let printStyle=document.getElementById('dynamicPrintSettings');
-  if(!printStyle){printStyle=document.createElement('style');printStyle.id='dynamicPrintSettings';document.head.appendChild(printStyle)}
-  printStyle.textContent=`@media print{@page{size:A4 ${orientation};margin:14mm}.print-only,.print-only *{font-family:${cssFont}!important}.print-only table,.print-only th,.print-only td{font-size:${fontSize}pt!important}}`;
+ const groups=sectorGroups(options.sectors||['ospiti']),cssFont=pdfCssFont(font);
+ $('#printArea').innerHTML=`<div style="font-family:${cssFont};font-size:${fontSize}pt">${groups.map(g=>sectorPrintBlock(g,options,font,fontSize,false)).join('')}</div>`;
+ let printStyle=document.getElementById('dynamicPrintSettings');if(!printStyle){printStyle=document.createElement('style');printStyle.id='dynamicPrintSettings';document.head.appendChild(printStyle)}
+ printStyle.textContent=`@media print{@page{size:A4 ${orientation};margin:14mm}.print-only,.print-only *{font-family:${cssFont}!important}.print-only table,.print-only th,.print-only td{font-size:${fontSize}pt!important}}`;
 }
 function openPrintOptions(){
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>OPZIONI DI STAMPA</h2><button class="icon-btn" data-close>✕</button></div><form id="printOptionsForm" style="display:grid;gap:15px;margin-top:16px"><label class="field">FONT DOCUMENTO<select id="printFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="printFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="printOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e CAP.</p><p style="margin:0;color:#405b70;font-size:.86rem">Nel campo Residenza e CAP viene riportata la provincia di residenza presente nell’archivio.</p>${printOptionsFields()}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA</button></div></form></div></div>`;
+  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>OPZIONI DI STAMPA</h2><button class="icon-btn" data-close>✕</button></div><form id="printOptionsForm" style="display:grid;gap:15px;margin-top:16px"><label class="field">FONT DOCUMENTO<select id="printFont"><option value="helvetica">Helvetica</option><option value="times">Times</option><option value="courier">Courier</option></select></label><label class="field">DIMENSIONE TESTO<select id="printFontSize"><option value="8">8 pt</option><option value="9" selected>9 pt</option><option value="10">10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></label><label class="field">ORIENTAMENTO<select id="printOrientation"><option value="portrait" selected>Verticale</option><option value="landscape">Orizzontale</option></select></label><p style="margin:0;color:#405b70"><strong>Inseriti di default:</strong> cognome e nome, luogo e data di nascita, residenza e CAP.</p><p style="margin:0;color:#405b70;font-size:.86rem">Nel campo Residenza e CAP viene riportata la provincia di residenza presente nell’archivio.</p>${sectorCheckboxes('print')}${printOptionsFields()}<div class="modal-actions"><button type="button" class="btn secondary" data-close>ANNULLA</button><button class="btn primary">ANTEPRIMA</button></div></form></div></div>`;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#printOptionsForm').onsubmit=e=>{e.preventDefault();openPrintPreview($('#printFont').value,Number($('#printFontSize').value)||9,$('#printOrientation').value,{tessera:$('#printTessera').checked,cf:$('#printCf').checked,scadenza:$('#printScadenza').checked,codSic:$('#printCodSic').checked})};
+  $('#printOptionsForm').onsubmit=e=>{e.preventDefault();const selected=selectedSectors();if(!selected.length){toast('Seleziona almeno un settore.',true);return}openPrintPreview($('#printFont').value,Number($('#printFontSize').value)||9,$('#printOrientation').value,{tessera:$('#printTessera').checked,cf:$('#printCf').checked,scadenza:$('#printScadenza').checked,codSic:$('#printCodSic').checked,sectors:selected})};
 }
 function openPrintPreview(font,fontSize,orientation,options){
-  const rows=sortRows(reservations,'oldest'),cssFont=pdfCssFont(font);
-  $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,1100px)"><div class="modal-head"><h2>ANTEPRIMA STAMPA</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#d9dde2;padding:10px"><div class="print-preview-sheet" data-orientation="${orientation}" style="padding:10mm;font-family:${cssFont};font-size:${fontSize}pt;background:#fff;color:#000">${printBrandHtml()}<h3 style="text-align:center;margin:0 0 10px;color:#000;font-family:${cssFont};font-size:${fontSize+5}pt">${esc(eventTitle())}</h3><p style="text-align:center;color:#000;font-family:${cssFont};font-size:${fontSize}pt">Persone aderenti: ${total()}</p>${printTableHtml(rows,options,true,cssFont,fontSize)}</div></div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>CHIUDI</button><button id="confirmPrint" class="btn primary">STAMPA</button></div></div></div>`;
-  document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
-  $('#confirmPrint').onclick=async()=>{
-    buildPrintArea(options,font,fontSize,orientation);
-    const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if(!isMobile){$('#modalHost').innerHTML='';window.print();return}
-    try{
-      if(!window.jspdf?.jsPDF)throw new Error('jsPDF non disponibile');
-      const cols=printColumns(options),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',orientation}),margin=8,pageWidth=doc.internal.pageSize.getWidth(),usableWidth=pageWidth-(margin*2);
-      doc.setFont(font,'bold');doc.setFontSize(Math.max(14,fontSize+5));doc.text(eventTitle(),margin,14,{maxWidth:usableWidth});
-      doc.setFont(font,'normal');doc.setFontSize(fontSize);doc.text(`Persone aderenti: ${total()}`,margin,20,{maxWidth:usableWidth});
-      doc.autoTable({startY:25,margin:{left:margin,right:margin},tableWidth:usableWidth,head:[cols.map(c=>c.label)],body:rows.map(r=>cols.map(c=>printValue(r,c.key)||'—')),styles:{font,fontSize,cellPadding:1.2,overflow:'linebreak',valign:'top'},headStyles:{fillColor:[6,106,168],fontStyle:'bold'},showHead:'everyPage'});
-      const blob=doc.output('blob'),file=new File([blob],'Genoa-Napoli-22-08-2026-Stampa.pdf',{type:'application/pdf'});
-      $('#modalHost').innerHTML='';
-      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]}))await navigator.share({files:[file],title:'Lista trasferta '+eventName});
-      else{const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000)}
-    }catch(err){toast('Impossibile aprire la stampa. Riprova.',true)}
-  };
+ const groups=sectorGroups(options.sectors||['ospiti']);
+ $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal" style="width:min(100%,1100px)"><div class="modal-head"><h2>ANTEPRIMA STAMPA</h2><button class="icon-btn" data-close>✕</button></div><div class="print-preview-scroll" style="margin-top:14px;max-height:58dvh;border:1px solid #d5e3ec;border-radius:12px;background:#d9dde2;padding:10px">${sectorPreviewHtml(groups,options,font,fontSize)}</div><div class="modal-actions" style="margin-top:14px"><button type="button" class="btn secondary" data-close>CHIUDI</button><button id="confirmPrint" class="btn primary">STAMPA</button></div></div></div>`;
+ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('#modalHost').innerHTML='');
+ $('#confirmPrint').onclick=async()=>{
+  buildPrintArea(options,font,fontSize,orientation);
+  const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if(!isMobile){$('#modalHost').innerHTML='';window.print();return}
+  try{
+   if(!window.jspdf?.jsPDF)throw new Error('jsPDF non disponibile');
+   const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4',orientation});
+   createSectorPdf(doc,sectorGroups(options.sectors||['ospiti']),options,font,fontSize);
+   const blob=doc.output('blob'),file=new File([blob],`${safeFilePart(eventName)}-${eventDate||'senza-data'}-Stampa.pdf`,{type:'application/pdf'});
+   $('#modalHost').innerHTML='';
+   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]}))await navigator.share({files:[file],title:'Lista trasferta '+eventName});
+   else{const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),60000)}
+  }catch(err){toast('Impossibile aprire la stampa. Riprova.',true)}
+ };
 }
 function printList(){openPrintOptions()}
 function showFirebaseLoading(){document.documentElement.classList.remove('firebase-ready');const el=document.getElementById('firebaseLoadingScreen');if(el)el.classList.remove('is-hidden')}function hideFirebaseLoading(){document.documentElement.classList.add('firebase-ready');const el=document.getElementById('firebaseLoadingScreen');if(el)el.classList.add('is-hidden')}
-function subscribe(){unsubSettings?.();unsubReservations?.();unsubDirectory?.();unsubFidelityReminders?.();unsubDirectory=onValue(ref(db,`${DATA_ROOT}/directory`),s=>{const data=s.val()||{};remoteDirectory=Object.values(data);mergeDirectory()},()=>toast('Errore durante il caricamento dell’archivio.',true));unsubSettings=onValue(ref(db,`${DATA_ROOT}/settings`),async s=>{const settings=s.val()||{};maxSeats=settings.general?.maxSeats||DEFAULT_MAX;eventName=settings.event?.name||'GENOA - NAPOLI';eventDate=settings.event?.date||'2026-08-22';eventTime=settings.event?.time||'';eventSeason=settings.event?.season||'2026/2027';if(!settings.general)await set(ref(db,`${DATA_ROOT}/settings/general`),{maxSeats:DEFAULT_MAX,updatedAt:Date.now(),updatedBy:user.uid});if(!settings.event)await set(ref(db,`${DATA_ROOT}/settings/event`),{name:eventName,date:eventDate,time:eventTime,season:eventSeason,updatedAt:Date.now(),updatedBy:user.uid});updateEventDisplay();render();hideFirebaseLoading()},()=>{hideFirebaseLoading();toast('Errore durante il caricamento delle impostazioni.',true)});unsubReservations=onValue(ref(db,`${DATA_ROOT}/reservations`),s=>{const data=s.val()||{};reservations=Object.entries(data).map(([id,value])=>({id,...value}));render()},()=>toast('Errore durante il caricamento delle prenotazioni.',true));unsubFidelityReminders=onValue(ref(db,`${DATA_ROOT}/fidelityReminders`),s=>{const data=s.val()||{};fidelityReminders=Object.entries(data).map(([id,value])=>({id,...value}));renderFidelityReminderCount()},()=>toast('Errore durante il caricamento dei promemoria.',true))}
+function subscribe(){unsubSettings?.();unsubReservations?.();unsubDirectory?.();unsubFidelityReminders?.();unsubDirectory=onValue(ref(db,`${DATA_ROOT}/directory`),s=>{const data=s.val()||{};remoteDirectory=Object.values(data);mergeDirectory()},()=>toast('Errore durante il caricamento dell’archivio.',true));unsubSettings=onValue(ref(db,`${DATA_ROOT}/settings`),async s=>{const settings=s.val()||{};sectors=[defaultSector(),...Object.entries(settings.sectors||{}).filter(([id,x])=>id!=='ospiti'&&x?.name).map(([id,x])=>({id,name:x.name}))];maxSeats=settings.general?.maxSeats||DEFAULT_MAX;eventName=settings.event?.name||'GENOA - NAPOLI';eventDate=settings.event?.date||'2026-08-22';eventTime=settings.event?.time||'';eventSeason=settings.event?.season||'2026/2027';if(!settings.general)await set(ref(db,`${DATA_ROOT}/settings/general`),{maxSeats:DEFAULT_MAX,updatedAt:Date.now(),updatedBy:user.uid});if(!settings.event)await set(ref(db,`${DATA_ROOT}/settings/event`),{name:eventName,date:eventDate,time:eventTime,season:eventSeason,updatedAt:Date.now(),updatedBy:user.uid});updateEventDisplay();render();hideFirebaseLoading()},()=>{hideFirebaseLoading();toast('Errore durante il caricamento delle impostazioni.',true)});unsubReservations=onValue(ref(db,`${DATA_ROOT}/reservations`),s=>{const data=s.val()||{};reservations=Object.entries(data).map(([id,value])=>({id,...value}));render()},()=>toast('Errore durante il caricamento delle prenotazioni.',true));unsubFidelityReminders=onValue(ref(db,`${DATA_ROOT}/fidelityReminders`),s=>{const data=s.val()||{};fidelityReminders=Object.entries(data).map(([id,value])=>({id,...value}));renderFidelityReminderCount()},()=>toast('Errore durante il caricamento dei promemoria.',true))}
 const menuPanel=$('#menuPanel');
 $('#menuBtn').onclick=()=>menuPanel.classList.toggle('hidden');
 document.addEventListener('click',e=>{if(!menuPanel.contains(e.target)&&e.target!==$('#menuBtn'))menuPanel.classList.add('hidden')});
@@ -2689,29 +2778,49 @@ $('#importFile').onchange=async e=>{
       throw new Error('FORMAT_NOT_RECOGNIZED');
     }
 
-    const existing=new Set(reservations.map(reservationIdentity));
-    const missing=rows.filter(r=>!existing.has(reservationIdentity(r)));
-    if(!missing.length){toast('Tutti i nominativi sono già presenti.');return}
-    if(!confirm(`Importare ${missing.length} nuovi nominativi senza eliminare quelli già presenti?`))return;
-
-    const updates={};
-    missing.forEach((r,i)=>{
-      const id=`import_${Date.now()}_${i}`;
-      const rawName=r.fullName||`${r.cognome||''} ${r.nome||''}`;
-      updates[`${DATA_ROOT}/reservations/${id}`]={
+    const prepared=[];
+    let skipped=0;
+    for(const inputRow of rows){
+      const rawName=inputRow.fullName||`${inputRow.cognome||''} ${inputRow.nome||''}`;
+      const member=inputRow.memberData||{nome:inputRow.nome||'',cognome:inputRow.cognome||'',dataNascita:inputRow.dataNascita||''};
+      const candidate={
         fullName:normalizeName(rawName).toLocaleUpperCase('it-IT'),
-        seats:Number.parseInt(r.seats,10)||1,
-        notes:String(r.notes||'').toLocaleUpperCase('it-IT'),
-        memberId:r.memberId||r.memberData?.id||'',
-        memberType:r.memberType||r.memberData?._tipo||'',
-        memberData:r.memberData||null,
+        sectorId:sectors.some(s=>s.id===inputRow.sectorId)?inputRow.sectorId:'ospiti',
+        seats:Number.parseInt(inputRow.seats,10)||1,
+        notes:String(inputRow.notes||'').toLocaleUpperCase('it-IT'),
+        memberId:inputRow.memberId||inputRow.memberData?.id||'',
+        memberType:inputRow.memberType||inputRow.memberData?._tipo||'',
+        memberData:member,
         surnameSort:surname(rawName),
-        createdAt:Number(r.createdAt)||Date.now()+i,
+        createdAt:Number(inputRow.createdAt)||Date.now()+prepared.length,
         updatedAt:Date.now(),createdBy:user.uid,updatedBy:user.uid
       };
-    });
-    await update(ref(db),firebaseSafe(updates));
-    toast(`${missing.length} nuovi nominativi importati.`);
+      const collision=findDuplicate(candidate,'',[...reservations,...prepared]);
+      if(collision?.match==='same'){skipped++;continue}
+      if(collision?.match==='verify'){
+        if(!confirm(`Possibile omonimo ${candidate.fullName}, con data di nascita mancante. Hai verificato che si tratti di una persona diversa?`)){skipped++;continue}
+        candidate._confirmedOmonym=true;
+      }
+      prepared.push(candidate);
+    }
+    if(!prepared.length){toast('Nessun nuovo nominativo da importare.');return}
+    if(!confirm(`Importare ${prepared.length} nominativi? ${skipped} duplicati o non confermati esclusi.`))return;
+    const result=await runTransaction(ref(db,`${DATA_ROOT}/reservations`),current=>{
+      const updated={...(current||{})};
+      const existing=Object.entries(updated).map(([id,x])=>({id,...x}));
+      let index=0;
+      for(const row of prepared){
+        const found=findDuplicate(row,'',existing);
+        if(found?.match==='same')continue;
+        if(found?.match==='verify'&&!row._confirmedOmonym)continue;
+        const clean={...row};delete clean._confirmedOmonym;
+        const id=`import_${Date.now()}_${index++}_${Math.random().toString(36).slice(2,7)}`;
+        updated[id]=clean;existing.push({id,...clean});
+      }
+      return updated;
+    },{applyLocally:false});
+    if(!result.committed)throw new Error('Importazione annullata');
+    toast(`Importazione completata: verificare i nominativi nelle rispettive schede.`);
   }catch(err){
     console.error('Errore lettura o formato JSON:',err);
     if(err instanceof SyntaxError){
@@ -2725,7 +2834,7 @@ $('#importFile').onchange=async e=>{
     e.target.value='';
   }
 };
-$('#addBtn').onclick=()=>openReservation();$('#search').oninput=render;$('#pdfBtn').onclick=()=>{menuPanel.classList.add('hidden');openPdfOptions()};$('#printBtn').onclick=()=>{menuPanel.classList.add('hidden');printList()};$('#reservationList').onclick=e=>{const position=e.target.closest('[data-position]'),edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(position)openPosition(reservations.find(r=>r.id===position.dataset.position));if(edit)openReservation(reservations.find(r=>r.id===edit.dataset.edit));if(del)openDelete(reservations.find(r=>r.id===del.dataset.delete))};
+$('#addBtn').onclick=()=>openReservation();$('#search').oninput=render;$('#pdfBtn').onclick=()=>{menuPanel.classList.add('hidden');openPdfOptions()};$('#printBtn').onclick=()=>{menuPanel.classList.add('hidden');printList()};$('#reservationList').onclick=e=>{const move=e.target.closest('[data-move-sector]'),position=e.target.closest('[data-position]'),edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(move)openMoveSector(reservations.find(r=>r.id===move.dataset.moveSector));if(position)openPosition(reservations.find(r=>r.id===position.dataset.position));if(edit)openReservation(reservations.find(r=>r.id===edit.dataset.edit));if(del)openDelete(reservations.find(r=>r.id===del.dataset.delete))};
 window.addEventListener('pagehide',()=>{showFirebaseLoading()});window.addEventListener('pageshow',e=>{if(e.persisted){showFirebaseLoading();window.location.reload()}});window.addEventListener('online',()=>$('#offline').classList.add('hidden'));window.addEventListener('offline',()=>$('#offline').classList.remove('hidden'));$('#offline').classList.toggle('hidden',navigator.onLine);
 updateEventDisplay();
 if(configured){const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getDatabase(app);setPersistence(auth,browserLocalPersistence).catch(()=>{});onAuthStateChanged(auth,async u=>{if(u){user=u;subscribe();return}try{await signInAnonymously(auth)}catch{hideFirebaseLoading();toast('Accesso automatico non riuscito. Abilita l’accesso anonimo in Firebase Authentication.',true)}})}else{hideFirebaseLoading();$('#setupNotice').classList.remove('hidden')}
