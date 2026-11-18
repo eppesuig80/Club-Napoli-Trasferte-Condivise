@@ -1546,6 +1546,12 @@ html.firebase-ready #app{visibility:visible!important;opacity:1!important}
     width:100% !important;
   }
 }
+
+/* Avvisi Fidelity visibili anche sui nominativi già inseriti, in ogni settore. */
+.card .fidelity-list-alert{grid-column:1/-1;margin:4px 0 0;padding:7px 9px;border-radius:9px;font-size:.78rem;font-weight:850;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+.card .fidelity-alert-danger{background:rgba(180,34,42,.18);border:1px solid rgba(246,80,91,.5);color:#ff949c}
+.card .fidelity-alert-check{background:rgba(181,116,19,.19);border:1px solid rgba(236,165,55,.5);color:#ffd38e}
+@media print{.card .fidelity-list-alert{display:none}}
 </style>
 
 </head>
@@ -1887,7 +1893,7 @@ function matchesReservationSearch(r,query){
   const names=[r?.fullName,member?.cognome&&member?.nome?`${member.cognome} ${member.nome}`:'',member?.nome&&member?.cognome?`${member.nome} ${member.cognome}`:''];
   return names.some(name=>normalizeListSearch(name).includes(query));
 }
-function render(){renderSectorTabs();const t=groupCount(activeSectorRows());$('#totalSeats').textContent=t;const q=normalizeListSearch($('#search').value);const rows=sortRows(activeSectorRows().filter(r=>matchesReservationSearch(r,q)),'oldest');$('#listCount').textContent=`${rows.length} nominativ${rows.length===1?'o':'i'}`;const list=$('#reservationList');if(!rows.length){list.innerHTML='<div class="empty">Nessun nominativo trovato.</div>';return}list.innerHTML=rows.map(r=>{const seats=Math.max(1,Number.parseInt(r.seats,10)||1),notes=String(r.notes||'').trim();return `<article class="card"><div class="card-main"><h3>${esc(r.fullName)}</h3><span class="badge" title="Numero posti">${seats} ${seats===1?'posto':'posti'}</span></div><button class="card-action" data-move-sector="${r.id}" aria-label="Sposta settore di ${esc(r.fullName)}" title="Sposta settore">⇄</button><button class="card-action" data-position="${r.id}" aria-label="Cambia posizione di ${esc(r.fullName)}" title="Posizione">↕</button><button class="card-action" data-edit="${r.id}" aria-label="Modifica ${esc(r.fullName)}" title="Modifica">✎</button><button class="card-action delete" data-delete="${r.id}" aria-label="Elimina ${esc(r.fullName)}" title="Elimina">🗑</button>${notes?`<p><strong>Note:</strong> ${esc(notes)}</p>`:''}</article>`}).join('')}
+function render(){renderSectorTabs();const t=groupCount(activeSectorRows());$('#totalSeats').textContent=t;const q=normalizeListSearch($('#search').value);const rows=sortRows(activeSectorRows().filter(r=>matchesReservationSearch(r,q)),'oldest');$('#listCount').textContent=`${rows.length} nominativ${rows.length===1?'o':'i'}`;const list=$('#reservationList');if(!rows.length){list.innerHTML='<div class="empty">Nessun nominativo trovato.</div>';return}list.innerHTML=rows.map(r=>{const seats=Math.max(1,Number.parseInt(r.seats,10)||1),notes=String(r.notes||'').trim(),fidelity=fidelityStatusForReservation(r);return `<article class="card"><div class="card-main"><h3>${esc(r.fullName)}</h3><span class="badge" title="Numero posti">${seats} ${seats===1?'posto':'posti'}</span></div><button class="card-action" data-move-sector="${r.id}" aria-label="Sposta settore di ${esc(r.fullName)}" title="Sposta settore">⇄</button><button class="card-action" data-position="${r.id}" aria-label="Cambia posizione di ${esc(r.fullName)}" title="Posizione">↕</button><button class="card-action" data-edit="${r.id}" aria-label="Modifica ${esc(r.fullName)}" title="Modifica">✎</button><button class="card-action delete" data-delete="${r.id}" aria-label="Elimina ${esc(r.fullName)}" title="Elimina">🗑</button>${fidelity?`<p class="fidelity-list-alert ${fidelity.type==='expired'||fidelity.type==='missing'?'fidelity-alert-danger':'fidelity-alert-check'}" role="status">⚠ ${esc(fidelity.title)}${fidelity.detail?` — ${esc(fidelity.detail)}`:''}</p>`:''}${notes?`<p><strong>Note:</strong> ${esc(notes)}</p>`:''}</article>`}).join('')}
 function memberLabel(m){return `${m.cognome||''} ${m.nome||''}`.trim().toLocaleUpperCase('it-IT')}
 function memberDetails(m){const bits=[m._tipo,m.dataNascita?`Nato/a: ${m.dataNascita}`:'',m.residenza?`Residenza: ${m.residenza}${m.provResidenza?` (${m.provResidenza})`:''}`:''];return bits.filter(Boolean).join(' • ')}
 function directoryKey(m){
@@ -2176,7 +2182,7 @@ function fidelityWarningData(member){
   }
 
   const expiry=parseLocalExpiryDate(member.scadenza);
-  if(!expiry)return null;
+  if(!expiry)return {type:'unverified',title:'SCADENZA FIDELITY DA VERIFICARE',reminderLabel:'SCADENZA DA VERIFICARE'};
 
   const today=new Date();
   today.setHours(0,0,0,0);
@@ -2190,6 +2196,52 @@ function fidelityWarningData(member){
     };
   }
 
+  return null;
+}
+// Controllo Fidelity sempre aggiornato per ogni nominativo in lista.
+// Nessuna modifica dei record: in assenza di dati attendibili segnala la verifica.
+function fidelityStatusForReservation(row){
+  const normalizedName=normalizeListSearch(row?.fullName||'');
+  const selectedId=String(row?.memberId||row?.memberData?.id||'').trim();
+  const birth=memberBirthKey(row?.memberData||{});
+  const all=[
+    ...remoteDirectory.map(m=>({member:m,origin:'remote'})),
+    ...(row?.memberData?[{member:row.memberData,origin:'reservation'}]:[]),
+    ...EMBEDDED_MEMBER_DIRECTORY.map(m=>({member:m,origin:'embedded'}))
+  ];
+  const matches=all.filter(({member:m})=>{
+    if(!m)return false;
+    const id=String(m.id||'').trim();
+    const name=normalizeListSearch(memberLabel(m));
+    const mBirth=memberBirthKey(m);
+    if(birth&&mBirth&&birth!==mBirth)return false;
+    return !!((selectedId&&id&&selectedId===id)||(normalizedName&&name&&normalizedName===name));
+  });
+  if(!matches.length){
+    return {type:'unknown',title:'DATI TESSERA DA VERIFICARE',detail:'Scheda socio non collegata o non trovata'};
+  }
+  // Non attribuire a un omonimo una tessera di un'altra persona.
+  const dates=new Set(matches.map(x=>memberBirthKey(x.member)).filter(Boolean));
+  if(!birth&&dates.size>1){
+    const direct=matches.filter(x=>selectedId&&String(x.member.id||'')===selectedId);
+    if(!direct.length)return {type:'unknown',title:'DATI TESSERA DA VERIFICARE',detail:'Omonimi: verifica la data di nascita'};
+    matches.splice(0,matches.length,...direct);
+  }
+  const identityMatches=matches.filter(x=>selectedId&&String(x.member.id||'')===selectedId);
+  const eligible=identityMatches.length?identityMatches:matches;
+  // Il database dei soci aggiornato è prioritario rispetto alle copie incorporate
+  // e ai vecchi dati memorizzati dentro la prenotazione.
+  const priority={remote:3,reservation:2,embedded:1};
+  eligible.sort((a,b)=>priority[b.origin]-priority[a.origin]||Number(b.member.updatedAt||0)-Number(a.member.updatedAt||0));
+  const member=eligible[0].member;
+  const card=String(member?.tessera||'').trim();
+  if(!card)return {type:'missing',title:'TESSERA MANCANTE',detail:''};
+  const raw=String(member?.scadenza||'').trim();
+  if(!raw)return {type:'unverified',title:'SCADENZA DA VERIFICARE',detail:'Data di scadenza mancante'};
+  const expiry=parseLocalExpiryDate(raw);
+  if(!expiry)return {type:'unverified',title:'SCADENZA DA VERIFICARE',detail:'Data non riconosciuta: '+raw};
+  const today=new Date();today.setHours(0,0,0,0);
+  if(expiry.getTime()<today.getTime())return {type:'expired',title:'TESSERA SCADUTA',detail:'Scadenza '+formatExpiryDate(raw)};
   return null;
 }
 function confirmFidelityWarning(warning){
@@ -2672,7 +2724,7 @@ function openPrintPreview(font,fontSize,orientation,options){
 }
 function printList(){openPrintOptions()}
 function showFirebaseLoading(){document.documentElement.classList.remove('firebase-ready');const el=document.getElementById('firebaseLoadingScreen');if(el)el.classList.remove('is-hidden')}function hideFirebaseLoading(){document.documentElement.classList.add('firebase-ready');const el=document.getElementById('firebaseLoadingScreen');if(el)el.classList.add('is-hidden')}
-function subscribe(){unsubSettings?.();unsubReservations?.();unsubDirectory?.();unsubFidelityReminders?.();unsubDirectory=onValue(ref(db,`${DATA_ROOT}/directory`),s=>{const data=s.val()||{};remoteDirectory=Object.values(data);mergeDirectory()},()=>toast('Errore durante il caricamento dell’archivio.',true));unsubSettings=onValue(ref(db,`${DATA_ROOT}/settings`),async s=>{const settings=s.val()||{};sectors=[defaultSector(),...Object.entries(settings.sectors||{}).filter(([id,x])=>id!=='ospiti'&&x?.name).map(([id,x])=>({id,name:x.name}))];maxSeats=settings.general?.maxSeats||DEFAULT_MAX;eventName=settings.event?.name||'GENOA - NAPOLI';eventDate=settings.event?.date||'2026-08-22';eventTime=settings.event?.time||'';eventSeason=settings.event?.season||'2026/2027';if(!settings.general)await set(ref(db,`${DATA_ROOT}/settings/general`),{maxSeats:DEFAULT_MAX,updatedAt:Date.now(),updatedBy:user.uid});if(!settings.event)await set(ref(db,`${DATA_ROOT}/settings/event`),{name:eventName,date:eventDate,time:eventTime,season:eventSeason,updatedAt:Date.now(),updatedBy:user.uid});updateEventDisplay();render();hideFirebaseLoading()},()=>{hideFirebaseLoading();toast('Errore durante il caricamento delle impostazioni.',true)});unsubReservations=onValue(ref(db,`${DATA_ROOT}/reservations`),s=>{const data=s.val()||{};reservations=Object.entries(data).map(([id,value])=>({id,...value}));render()},()=>toast('Errore durante il caricamento delle prenotazioni.',true));unsubFidelityReminders=onValue(ref(db,`${DATA_ROOT}/fidelityReminders`),s=>{const data=s.val()||{};fidelityReminders=Object.entries(data).map(([id,value])=>({id,...value}));renderFidelityReminderCount()},()=>toast('Errore durante il caricamento dei promemoria.',true))}
+function subscribe(){unsubSettings?.();unsubReservations?.();unsubDirectory?.();unsubFidelityReminders?.();unsubDirectory=onValue(ref(db,`${DATA_ROOT}/directory`),s=>{const data=s.val()||{};remoteDirectory=Object.values(data);mergeDirectory();render()},()=>toast('Errore durante il caricamento dell’archivio.',true));unsubSettings=onValue(ref(db,`${DATA_ROOT}/settings`),async s=>{const settings=s.val()||{};sectors=[defaultSector(),...Object.entries(settings.sectors||{}).filter(([id,x])=>id!=='ospiti'&&x?.name).map(([id,x])=>({id,name:x.name}))];maxSeats=settings.general?.maxSeats||DEFAULT_MAX;eventName=settings.event?.name||'GENOA - NAPOLI';eventDate=settings.event?.date||'2026-08-22';eventTime=settings.event?.time||'';eventSeason=settings.event?.season||'2026/2027';if(!settings.general)await set(ref(db,`${DATA_ROOT}/settings/general`),{maxSeats:DEFAULT_MAX,updatedAt:Date.now(),updatedBy:user.uid});if(!settings.event)await set(ref(db,`${DATA_ROOT}/settings/event`),{name:eventName,date:eventDate,time:eventTime,season:eventSeason,updatedAt:Date.now(),updatedBy:user.uid});updateEventDisplay();render();hideFirebaseLoading()},()=>{hideFirebaseLoading();toast('Errore durante il caricamento delle impostazioni.',true)});unsubReservations=onValue(ref(db,`${DATA_ROOT}/reservations`),s=>{const data=s.val()||{};reservations=Object.entries(data).map(([id,value])=>({id,...value}));render()},()=>toast('Errore durante il caricamento delle prenotazioni.',true));unsubFidelityReminders=onValue(ref(db,`${DATA_ROOT}/fidelityReminders`),s=>{const data=s.val()||{};fidelityReminders=Object.entries(data).map(([id,value])=>({id,...value}));renderFidelityReminderCount()},()=>toast('Errore durante il caricamento dei promemoria.',true))}
 const menuPanel=$('#menuPanel');
 $('#menuBtn').onclick=()=>menuPanel.classList.toggle('hidden');
 document.addEventListener('click',e=>{if(!menuPanel.contains(e.target)&&e.target!==$('#menuBtn'))menuPanel.classList.add('hidden')});
