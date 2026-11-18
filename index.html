@@ -2296,16 +2296,28 @@ function fidelityReminderPayload(member,label){
   };
 }
 function currentFidelityReminders(){
-  return fidelityReminders.filter(item=>{
-    if(item.resolved)return false;
-    const member=MEMBER_DIRECTORY.find(m=>
-      (item.memberId&&String(m.id||'')===String(item.memberId))||
-      normalizeListSearch(memberLabel(m))===normalizeListSearch(item.name||''));
-    // Non mostrare un vecchio avviso se i dati aggiornati confermano una tessera valida.
-    if(!member)return true;
-    const warning=fidelityWarningData(member);
-    return warning!==null;
+  // La finestra usa lo stesso controllo aggiornato che appare nelle liste.
+  // Ogni persona viene conteggiata una sola volta, anche se ci sono vecchi promemoria.
+  const found=new Map();
+  reservations.forEach(row=>{
+    const warning=fidelityStatusForReservation(row);
+    if(!warning||!['expired','missing'].includes(warning.type))return;
+
+    const member=row.memberData||null;
+    const key=member?fidelityReminderKey(member):
+      'reservation_'+String(row.id||'').replace(/[^a-zA-Z0-9_-]/g,'_');
+    const existing=fidelityReminders.find(item=>item.id===key ||
+      (row.memberId&&String(item.memberId||'')===String(row.memberId)));
+    if(existing?.resolved)return;
+
+    const name=String(row.fullName||memberLabel(member)||'').trim();
+    const identity=normalizeListSearch(name)+'|'+(memberBirthKey(member||{})||'');
+    const item={id:key,name,label:warning.type==='expired'?'FIDELITY SCADUTA':'FIDELITY NON PRESENTE',
+      memberId:String(row.memberId||member?.id||'')};
+    const prior=found.get(identity);
+    if(!prior || (prior.label!=='FIDELITY SCADUTA'&&item.label==='FIDELITY SCADUTA'))found.set(identity,item);
   });
+  return [...found.values()];
 }
 function renderFidelityReminderCount(){
   const count=currentFidelityReminders().length;
@@ -2726,7 +2738,7 @@ function openPrintPreview(font,fontSize,orientation,options){
 }
 function printList(){openPrintOptions()}
 function showFirebaseLoading(){document.documentElement.classList.remove('firebase-ready');const el=document.getElementById('firebaseLoadingScreen');if(el)el.classList.remove('is-hidden')}function hideFirebaseLoading(){document.documentElement.classList.add('firebase-ready');const el=document.getElementById('firebaseLoadingScreen');if(el)el.classList.add('is-hidden')}
-function subscribe(){unsubSettings?.();unsubReservations?.();unsubDirectory?.();unsubFidelityReminders?.();unsubDirectory=onValue(ref(db,`${DATA_ROOT}/directory`),s=>{const data=s.val()||{};remoteDirectory=Object.values(data);mergeDirectory();render()},()=>toast('Errore durante il caricamento dell’archivio.',true));unsubSettings=onValue(ref(db,`${DATA_ROOT}/settings`),async s=>{const settings=s.val()||{};sectors=[defaultSector(),...Object.entries(settings.sectors||{}).filter(([id,x])=>id!=='ospiti'&&x?.name).map(([id,x])=>({id,name:x.name}))];maxSeats=settings.general?.maxSeats||DEFAULT_MAX;eventName=settings.event?.name||'GENOA - NAPOLI';eventDate=settings.event?.date||'2026-08-22';eventTime=settings.event?.time||'';eventSeason=settings.event?.season||'2026/2027';if(!settings.general)await set(ref(db,`${DATA_ROOT}/settings/general`),{maxSeats:DEFAULT_MAX,updatedAt:Date.now(),updatedBy:user.uid});if(!settings.event)await set(ref(db,`${DATA_ROOT}/settings/event`),{name:eventName,date:eventDate,time:eventTime,season:eventSeason,updatedAt:Date.now(),updatedBy:user.uid});updateEventDisplay();render();hideFirebaseLoading()},()=>{hideFirebaseLoading();toast('Errore durante il caricamento delle impostazioni.',true)});unsubReservations=onValue(ref(db,`${DATA_ROOT}/reservations`),s=>{const data=s.val()||{};reservations=Object.entries(data).map(([id,value])=>({id,...value}));render()},()=>toast('Errore durante il caricamento delle prenotazioni.',true));unsubFidelityReminders=onValue(ref(db,`${DATA_ROOT}/fidelityReminders`),s=>{const data=s.val()||{};fidelityReminders=Object.entries(data).map(([id,value])=>({id,...value}));renderFidelityReminderCount()},()=>toast('Errore durante il caricamento dei promemoria.',true))}
+function subscribe(){unsubSettings?.();unsubReservations?.();unsubDirectory?.();unsubFidelityReminders?.();unsubDirectory=onValue(ref(db,`${DATA_ROOT}/directory`),s=>{const data=s.val()||{};remoteDirectory=Object.values(data);mergeDirectory();render()},()=>toast('Errore durante il caricamento dell’archivio.',true));unsubSettings=onValue(ref(db,`${DATA_ROOT}/settings`),async s=>{const settings=s.val()||{};sectors=[defaultSector(),...Object.entries(settings.sectors||{}).filter(([id,x])=>id!=='ospiti'&&x?.name).map(([id,x])=>({id,name:x.name}))];maxSeats=settings.general?.maxSeats||DEFAULT_MAX;eventName=settings.event?.name||'GENOA - NAPOLI';eventDate=settings.event?.date||'2026-08-22';eventTime=settings.event?.time||'';eventSeason=settings.event?.season||'2026/2027';if(!settings.general)await set(ref(db,`${DATA_ROOT}/settings/general`),{maxSeats:DEFAULT_MAX,updatedAt:Date.now(),updatedBy:user.uid});if(!settings.event)await set(ref(db,`${DATA_ROOT}/settings/event`),{name:eventName,date:eventDate,time:eventTime,season:eventSeason,updatedAt:Date.now(),updatedBy:user.uid});updateEventDisplay();render();hideFirebaseLoading()},()=>{hideFirebaseLoading();toast('Errore durante il caricamento delle impostazioni.',true)});unsubReservations=onValue(ref(db,`${DATA_ROOT}/reservations`),s=>{const data=s.val()||{};reservations=Object.entries(data).map(([id,value])=>({id,...value}));render();renderFidelityReminderCount()},()=>toast('Errore durante il caricamento delle prenotazioni.',true));unsubFidelityReminders=onValue(ref(db,`${DATA_ROOT}/fidelityReminders`),s=>{const data=s.val()||{};fidelityReminders=Object.entries(data).map(([id,value])=>({id,...value}));renderFidelityReminderCount()},()=>toast('Errore durante il caricamento dei promemoria.',true))}
 const menuPanel=$('#menuPanel');
 $('#menuBtn').onclick=()=>menuPanel.classList.toggle('hidden');
 document.addEventListener('click',e=>{if(!menuPanel.contains(e.target)&&e.target!==$('#menuBtn'))menuPanel.classList.add('hidden')});
