@@ -1897,15 +1897,55 @@ function directoryKey(m){
   let h=0;for(let i=0;i<raw.length;i++)h=((h<<5)-h)+raw.charCodeAt(i)|0;
   return 'auto_'+Math.abs(h);
 }
+// Unifica le copie della stessa persona per la visualizzazione, senza cancellare record Firebase.
+// Nome e cognome uguali NON bastano: la nascita (o CF/ID) deve confermare l'identità.
+function memberBirthKey(m){
+  const value=String(m?.dataNascita||m?.data_nascita||m?.nascita||'').trim();
+  const iso=value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(iso)return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const it=value.match(/^(\d{2})[\/.](\d{2})[\/.](\d{4})$/);
+  return it?`${it[3]}-${it[2]}-${it[1]}`:'';
+}
+function memberSamePersonKeys(m){
+  const name=normalizeListSearch(`${m?.cognome||''} ${m?.nome||''}`);
+  const born=memberBirthKey(m);
+  const cf=normalizeListSearch(m?.cf||'');
+  const id=String(m?.id||'').trim();
+  return [cf.length===16?`cf:${cf}`:'',name&&born?`born:${name}|${born}`:'',id?`id:${id}`:''].filter(Boolean);
+}
+function mergeMemberCopies(a,b){
+  const first=memberDataScore(a),second=memberDataScore(b);
+  const newer=Number(b?.updatedAt||0)>Number(a?.updatedAt||0);
+  const primary=second>first||(second===first&&newer)?b:a;
+  const secondary=primary===b?a:b;
+  const merged={...secondary,...primary};
+  for(const [k,v] of Object.entries(secondary)){
+    if(!hasImportedValue(merged[k])&&hasImportedValue(v))merged[k]=v;
+  }
+  // Se due copie della stessa tessera hanno scadenze discordanti, evita falsi scaduti.
+  const sameCard=normalizeListSearch(a?.tessera||'')&&normalizeListSearch(a?.tessera||'')===normalizeListSearch(b?.tessera||'');
+  if(sameCard){
+    const dates=[a.scadenza,b.scadenza].map(v=>({value:v,date:parseLocalExpiryDate(v)})).filter(x=>x.date);
+    dates.sort((x,y)=>y.date-x.date);
+    if(dates.length)merged.scadenza=dates[0].value;
+  }
+  return merged;
+}
 function mergeDirectory(){
-  const map=new Map();
+  const groups=[];
+  const identities=new Map();
   [...EMBEDDED_MEMBER_DIRECTORY,...remoteDirectory].forEach(m=>{
     if(!m||!m.nome||!m.cognome)return;
-    const key=String(m.id||'')||`${m.nome}|${m.cognome}|${m.dataNascita||''}|${m._tipo||''}`;
-    map.set(key,{...m});
+    const keys=memberSamePersonKeys(m);
+    // Non collegare omonimi con date di nascita differenti, anche se altri dati sono incompleti.
+    let index=keys.map(k=>identities.get(k)).find(i=>i!==undefined);
+    if(index===undefined){index=groups.length;groups.push({...m});}
+    else groups[index]=mergeMemberCopies(groups[index],m);
+    [...keys,...memberSamePersonKeys(groups[index])].forEach(k=>identities.set(k,index));
   });
-  MEMBER_DIRECTORY=[...map.values()];
+  MEMBER_DIRECTORY=groups;
   if(typeof refreshMemberSuggestions==='function')refreshMemberSuggestions();
+  if(typeof renderFidelityReminderCount==='function')renderFidelityReminderCount();
 }
 function extractDirectoryRows(data){
   const root=data?.appData||data||{};
@@ -1914,9 +1954,8 @@ function extractDirectoryRows(data){
   return [...soci.map(x=>({...x,_tipo:'SOCIO'})),...accompagnatori.map(x=>({...x,_tipo:'ACCOMPAGNATORE'}))];
 }
 function directoryIdentity(m){
-  const id=String(m?.id||'').trim();
-  if(id)return `ID:${id}`;
-  return `DATI:${[m?.nome,m?.cognome,m?.dataNascita,m?._tipo].map(v=>normalizeName(v).toLocaleUpperCase('it-IT')).join('|')}`;
+  const keys=memberSamePersonKeys(m);
+  return keys[0]||`DATI:${[m?.nome,m?.cognome,m?._tipo].map(v=>normalizeListSearch(v)).join('|')}`;
 }
 function hasImportedValue(v){
   if(v===null||v===undefined)return false;
@@ -2031,6 +2070,13 @@ function firebaseImportErrorMessage(err){
   if(message.includes('invalid')||message.includes('undefined')||message.includes('nan'))return 'Importazione letta correttamente, ma alcuni valori non erano compatibili con Firebase. I dati sono stati ripuliti: riprova l’importazione.';
   return 'Importazione letta correttamente, ma il salvataggio su Firebase non è riuscito. Riprova.';
 }
+function findCompleteDirectoryEntry(member){
+  if(!member)return null;
+  const keys=new Set(memberSamePersonKeys(member));
+  const candidates=MEMBER_DIRECTORY.filter(m=>memberSamePersonKeys(m).some(k=>keys.has(k)));
+  if(!candidates.length)return member;
+  return candidates.reduce((merged,m)=>mergeMemberCopies(merged,m),member);
+}
 function reservationIdentity(r){
   return String(r?.memberData?.id||r?.memberId||'')||normalizeName(r?.fullName||'').toLocaleUpperCase('it-IT');
 }
@@ -2094,9 +2140,11 @@ async function saveManualReservation(e){
 }
 
 function parseLocalExpiryDate(value){
-  const match=String(value||'').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(!match)return null;
-  const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]);
+  const raw=String(value||'').trim();
+  const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  const italian=raw.match(/^(\d{2})[\/.](\d{2})[\/.](\d{4})$/);
+  if(!iso&&!italian)return null;
+  const year=Number(iso?iso[1]:italian[3]),month=Number(iso?iso[2]:italian[2]),day=Number(iso?iso[3]:italian[1]);
   const date=new Date(year,month-1,day);
   if(
     date.getFullYear()!==year||
@@ -2133,15 +2181,12 @@ function fidelityWarningData(member){
   const today=new Date();
   today.setHours(0,0,0,0);
 
-  const dayMs=24*60*60*1000;
-  const days=Math.round((expiry.getTime()-today.getTime())/dayMs);
-
-  if(days<=3){
+  // La tessera è valida per tutto il giorno indicato come scadenza.
+  if(expiry.getTime()<today.getTime()){
     return {
       type:'expired',
       title:'FIDELITY CARD SCADUTA',
-      reminderLabel:'FIDELITY SCADUTA',
-      days
+      reminderLabel:'FIDELITY SCADUTA' 
     };
   }
 
@@ -2196,15 +2241,26 @@ function fidelityReminderPayload(member,label){
     createdBy:user?.uid||''
   };
 }
+function currentFidelityReminders(){
+  return fidelityReminders.filter(item=>{
+    if(item.resolved)return false;
+    const member=MEMBER_DIRECTORY.find(m=>
+      (item.memberId&&String(m.id||'')===String(item.memberId))||
+      normalizeListSearch(memberLabel(m))===normalizeListSearch(item.name||''));
+    // Non mostrare un vecchio avviso se i dati aggiornati confermano una tessera valida.
+    if(!member)return true;
+    const warning=fidelityWarningData(member);
+    return warning!==null;
+  });
+}
 function renderFidelityReminderCount(){
-  const count=fidelityReminders.filter(item=>!item.resolved).length;
+  const count=currentFidelityReminders().length;
   const node=document.getElementById('fidelityReminderCount');
   if(node)node.textContent=String(count);
 }
 function openFidelityReminders(){
   menuPanel.classList.add('hidden');
-  const rows=fidelityReminders
-    .filter(item=>!item.resolved)
+  const rows=currentFidelityReminders()
     .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'it'));
 
   $('#modalHost').innerHTML=`
@@ -2267,9 +2323,8 @@ async function saveReservation(e){
     return;
   }
 
-  const memberData=selectedMember
-    ?JSON.parse(JSON.stringify(selectedMember))
-    :(editing?.memberData||null);
+  const originalMember=selectedMember||editing?.memberData||null;
+  const memberData=originalMember?JSON.parse(JSON.stringify(findCompleteDirectoryEntry(originalMember))):null;
   const name=memberData?memberLabel(memberData):typedName;
   const normalizedName=normalizeName(name).toLocaleUpperCase('it-IT');
 
@@ -2485,6 +2540,9 @@ function personMatchScore(r,m){
   if(!source)return -1;
   const ordered=personText(`${m?.cognome||''} ${m?.nome||''}`);
   const reversed=personText(`${m?.nome||''} ${m?.cognome||''}`);
+  const reservedBirth=memberBirthKey(r?.memberData||{});
+  const candidateBirth=memberBirthKey(m);
+  if(reservedBirth&&candidateBirth&&reservedBirth!==candidateBirth)return -1;
   if(source===ordered||source===reversed)return 9000;
   if(normalizePersonKey(source)===normalizePersonKey(ordered))return 8500;
 
@@ -2539,7 +2597,7 @@ function openMemberEditor(m){
   const miss=memberMissingFields(m);
   $('#modalHost').innerHTML=`<div class="modal-bg"><div class="modal"><div class="modal-head"><h2>MODIFICA DATI</h2><button class="icon-btn" data-close>✕</button></div>${miss.length?`<div class="missing-note" style="margin-top:12px">Campi mancanti: ${esc(miss.join(', '))}</div>`:''}<form id="memberEditForm"><div class="manual-form-grid"><label class="field">TIPO<select id="meType"><option value="SOCIO" ${m._tipo==='SOCIO'?'selected':''}>SOCIO</option><option value="ACCOMPAGNATORE" ${m._tipo==='ACCOMPAGNATORE'?'selected':''}>ACCOMPAGNATORE</option></select></label><label class="field">SESSO<select id="meSex"><option value=""></option><option value="M" ${m.sesso==='M'?'selected':''}>M</option><option value="F" ${m.sesso==='F'?'selected':''}>F</option></select></label><label class="field">NOME<input id="meName" required value="${esc(m.nome||'')}"></label><label class="field">COGNOME<input id="meSurname" required value="${esc(m.cognome||'')}"></label><label class="field">DATA DI NASCITA<input id="meBirthDate" type="date" value="${esc(m.dataNascita||'')}"></label><label class="field">LUOGO DI NASCITA<input id="meBirthPlace" value="${esc(m.luogo||'')}"></label><label class="field">PROVINCIA DI NASCITA<input id="meBirthProvince" maxlength="3" value="${esc(m.prov||'')}"></label><label class="field">RESIDENZA<input id="meResidence" value="${esc(m.residenza||'')}"></label><label class="field">PROVINCIA DI RESIDENZA<input id="meResidenceProvince" maxlength="3" value="${esc(m.provResidenza||'')}"></label><label class="field">CODICE FISCALE<input id="meCf" value="${esc(m.cf||'')}"></label><label class="field">TESSERA DEL TIFOSO<input id="meCard" value="${esc(m.tessera||'')}"></label><label class="field">SCADENZA<input id="meExpiry" type="date" value="${esc(m.scadenza||'')}"></label><label class="field">COD. SIC<input id="meSic" value="${esc(m.codSic||'')}"></label></div><div id="memberEditError" class="error hidden"></div><div class="modal-actions"><button type="button" class="btn secondary" id="backDataBtn">INDIETRO</button><button class="btn primary">SALVA</button></div></form></div></div>`;
   document.querySelector('[data-close]').onclick=()=>$('#modalHost').innerHTML='';$('#backDataBtn').onclick=openDataMembers;
-  $('#memberEditForm').onsubmit=async e=>{e.preventDefault();const err=$('#memberEditError');const updated={...m,_tipo:$('#meType').value,nome:normalizeName($('#meName').value).toLocaleUpperCase('it-IT'),cognome:normalizeName($('#meSurname').value).toLocaleUpperCase('it-IT'),sesso:$('#meSex').value,dataNascita:$('#meBirthDate').value||'',luogo:normalizeName($('#meBirthPlace').value).toLocaleUpperCase('it-IT'),prov:normalizeName($('#meBirthProvince').value).toLocaleUpperCase('it-IT'),residenza:normalizeName($('#meResidence').value).toLocaleUpperCase('it-IT'),provResidenza:normalizeName($('#meResidenceProvince').value).toLocaleUpperCase('it-IT'),cf:normalizeName($('#meCf').value).toLocaleUpperCase('it-IT'),tessera:normalizeName($('#meCard').value).toLocaleUpperCase('it-IT'),scadenza:$('#meExpiry').value||'',codSic:normalizeName($('#meSic').value).toLocaleUpperCase('it-IT'),updatedAt:Date.now(),updatedBy:user.uid};if(!updated.nome||!updated.cognome){err.textContent='Nome e cognome sono obbligatori.';err.classList.remove('hidden');return}try{const updates={};updates[`${DATA_ROOT}/directory/${directoryKey(updated)}`]=updated;reservations.forEach(r=>{const linked=findDirectoryMemberForReservation(r);if(String(linked.id||'')===String(m.id||'')||normalizePersonKey(r.fullName)===normalizePersonKey(memberLabel(m))){updates[`${DATA_ROOT}/reservations/${r.id}/memberData`]=updated;updates[`${DATA_ROOT}/reservations/${r.id}/memberId`]=updated.id||'';updates[`${DATA_ROOT}/reservations/${r.id}/memberType`]=updated._tipo||'';updates[`${DATA_ROOT}/reservations/${r.id}/fullName`]=memberLabel(updated);updates[`${DATA_ROOT}/reservations/${r.id}/surnameSort`]=surname(memberLabel(updated));updates[`${DATA_ROOT}/reservations/${r.id}/updatedAt`]=Date.now();updates[`${DATA_ROOT}/reservations/${r.id}/updatedBy`]=user.uid}});await update(ref(db),updates);toast('Dati aggiornati anche nelle trasferte.');openDataMembers()}catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione.';err.classList.remove('hidden')}};
+  $('#memberEditForm').onsubmit=async e=>{e.preventDefault();const err=$('#memberEditError');const updated={...m,_tipo:$('#meType').value,nome:normalizeName($('#meName').value).toLocaleUpperCase('it-IT'),cognome:normalizeName($('#meSurname').value).toLocaleUpperCase('it-IT'),sesso:$('#meSex').value,dataNascita:$('#meBirthDate').value||'',luogo:normalizeName($('#meBirthPlace').value).toLocaleUpperCase('it-IT'),prov:normalizeName($('#meBirthProvince').value).toLocaleUpperCase('it-IT'),residenza:normalizeName($('#meResidence').value).toLocaleUpperCase('it-IT'),provResidenza:normalizeName($('#meResidenceProvince').value).toLocaleUpperCase('it-IT'),cf:normalizeName($('#meCf').value).toLocaleUpperCase('it-IT'),tessera:normalizeName($('#meCard').value).toLocaleUpperCase('it-IT'),scadenza:$('#meExpiry').value||'',codSic:normalizeName($('#meSic').value).toLocaleUpperCase('it-IT'),updatedAt:Date.now(),updatedBy:user.uid};if(!updated.nome||!updated.cognome){err.textContent='Nome e cognome sono obbligatori.';err.classList.remove('hidden');return}try{const updates={};updates[`${DATA_ROOT}/directory/${directoryKey(updated)}`]=updated;reservations.forEach(r=>{const linked=findDirectoryMemberForReservation(r);if((m.id&&String(linked.id||'')===String(m.id))||(normalizePersonKey(r.fullName)===normalizePersonKey(memberLabel(m))&&memberBirthKey(r.memberData||{})&&memberBirthKey(r.memberData||{})===memberBirthKey(m))){updates[`${DATA_ROOT}/reservations/${r.id}/memberData`]=updated;updates[`${DATA_ROOT}/reservations/${r.id}/memberId`]=updated.id||'';updates[`${DATA_ROOT}/reservations/${r.id}/memberType`]=updated._tipo||'';updates[`${DATA_ROOT}/reservations/${r.id}/fullName`]=memberLabel(updated);updates[`${DATA_ROOT}/reservations/${r.id}/surnameSort`]=surname(memberLabel(updated));updates[`${DATA_ROOT}/reservations/${r.id}/updatedAt`]=Date.now();updates[`${DATA_ROOT}/reservations/${r.id}/updatedBy`]=user.uid}});await update(ref(db),updates);toast('Dati aggiornati anche nelle trasferte.');openDataMembers()}catch(x){err.textContent='Salvataggio non riuscito. Controlla la connessione.';err.classList.remove('hidden')}};
 }
 
 function printColumns(options){
