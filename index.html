@@ -2181,7 +2181,9 @@ function fidelityWarningData(member){
     };
   }
 
-  const expiry=parseLocalExpiryDate(member.scadenza);
+  const rawExpiry=String(member.scadenza||'').trim();
+  if(!rawExpiry)return null;
+  const expiry=parseLocalExpiryDate(rawExpiry);
   if(!expiry)return {type:'unverified',title:'SCADENZA FIDELITY DA VERIFICARE',reminderLabel:'SCADENZA DA VERIFICARE'};
 
   const today=new Date();
@@ -2237,7 +2239,7 @@ function fidelityStatusForReservation(row){
   const card=String(member?.tessera||'').trim();
   if(!card)return {type:'missing',title:'TESSERA MANCANTE',detail:''};
   const raw=String(member?.scadenza||'').trim();
-  if(!raw)return {type:'unverified',title:'SCADENZA DA VERIFICARE',detail:'Data di scadenza mancante'};
+  if(!raw)return null;
   const expiry=parseLocalExpiryDate(raw);
   if(!expiry)return {type:'unverified',title:'SCADENZA DA VERIFICARE',detail:'Data non riconosciuta: '+raw};
   const today=new Date();today.setHours(0,0,0,0);
